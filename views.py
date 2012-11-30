@@ -1,7 +1,6 @@
 import braintree
 import uuid
 
-from django.conf import settings
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -12,18 +11,6 @@ from ..accounts import access
 
 from .utils import check_customer, check_credit_card, get_subscription
 
-
-if settings.BRAINTREE_ENV != 'PRODUCTION':
-    BRAINTREE_ENV = braintree.Environment.Sandbox
-else:
-    BRAINTREE_ENV = braintree.Environment.Production
-
-braintree.Configuration.configure(
-    BRAINTREE_ENV,
-    settings.BRAINTREE_MERCHANT,
-    settings.BRAINTREE_PUBLIC_KEY,
-    settings.BRAINTREE_PRIVATE_KEY
-)
 
 
 # TODO: Add decorator to directly receive customer in each view
