@@ -1,25 +1,28 @@
 from django import forms
 from django.contrib import admin
 
-from .models import Customer, Address
-
-class AddressForm(forms.ModelForm):
-    id = forms.CharField(required=False, widget= forms.TextInput(attrs={
-        'readonly': True,
-        'style': 'border: none;',
-        'placeholder': None
-    }))
-
-    class Meta:
-        model = Address
-
-    def clean_id(self):
-        return self.instance.id
+from .models import Customer, Address, CreditCard
 
 class AddressInlineAdmin(admin.StackedInline):
     model = Address
-    form = AddressForm
     extra = 0
+
+class CreditCardInline(admin.StackedInline):
+    model = CreditCard
+    extra = 0
+    readonly_fields = (
+        'default',
+        'bin',
+        'last_4',
+        'cardholder_name',
+        'expiration_month',
+        'expiration_year',
+        'expiration_date',
+        'masked_number',
+        'unique_number_identifier',
+        'country_of_issuance',
+        'issuing_bank',
+    )
 
 class CustomerAdmin(admin.ModelAdmin):
     list_display = (
@@ -31,7 +34,7 @@ class CustomerAdmin(admin.ModelAdmin):
         'phone',
         'website'
     )
-    inlines = (AddressInlineAdmin,)
+    inlines = (AddressInlineAdmin, CreditCardInline)
     raw_id_fields = ('id',)
     readonly_fields = ('created', 'updated')
     actions = ('pull',)

@@ -13,7 +13,7 @@ from django.utils.timezone import now
 def BraintreeSyncedModel(braintree_collection):
     """ A django model for 2-way sync with the braintree vault """
 
-    class BraintreeModel(models.Model):
+    class BTSyncedModel(models.Model):
         # This is the vault data collection we sync with
         collection = braintree_collection
 
@@ -60,17 +60,13 @@ def BraintreeSyncedModel(braintree_collection):
             """ Push this instance into the vault """
             key = self.braintree_key()
 
-            print "push"
-
             try:
                 data = self.serialize_update()
                 result = self.collection.update(*key, params=data)
-                print data
             except (NotFoundError, KeyError):
                 data = self.serialize_create()
                 result = self.collection.create(data)
                 self.created = now()
-                print data
 
             if not result.is_success:
                 raise ValidationError(result.message)
@@ -112,15 +108,62 @@ def BraintreeSyncedModel(braintree_collection):
                         new.save()
 
     @receiver(pre_delete, weak=False)
-    def delete_braintree(sender, instance, **kwargs):
+    def delete_in_vault(sender, instance, **kwargs):
         """ Delete all instance in the vault """
-        if issubclass(sender, BraintreeModel):
+        if issubclass(sender, BTSyncedModel):
             try:
                 braintree_collection.delete(*instance.braintree_key())
-            except NotFoundError:
+            except (NotFoundError, KeyError):
                 pass
 
-    return BraintreeModel
+    return BTSyncedModel
+
+
+def BraintreeMirroredModel(braintree_collection):
+    """ A django model that only updates itself from the vault """
+
+    class BTMirroredModel(models.Model):
+        # This is the vault data collection we mirror from
+        collection = braintree_collection
+
+        class Meta:
+            abstract = True
+
+        def braintree_key(self):
+            """ A represantion of how this instance is indexed in the vault """
+            raise NotImplementedError('braintree_key() not implemented')
+
+        def clean(self):
+            try:
+                self.import_from_vault()
+            except (NotFoundError, KeyError):
+                self.reset_fields()
+
+        def reset_fields(self):
+            for field in self._meta.fields:
+                if getattr(field, 'null', False):
+                    setattr(self, field.name, None)
+
+        def import_from_vault(self):
+            """ Copy data from vault and set on all fields """
+            key = self.braintree_key()
+            data = self.collection.find(*key)
+            self.import_data(data)
+
+        def import_data(self, data):
+            """ How the data from the vault into the instance """
+            raise NotImplementedError('import_data(data) not implemented')
+
+    @receiver(pre_delete, weak=False)
+    def delete_in_vault(sender, instance, **kwargs):
+        """ Delete all instance in the vault """
+        if issubclass(sender, BTMirroredModel):
+            try:
+                braintree_collection.delete(*instance.braintree_key())
+            except (NotFoundError, KeyError):
+                pass
+
+    return BTMirroredModel
 
 
 class Customer(BraintreeSyncedModel(braintree.Customer)):
@@ -139,7 +182,7 @@ class Customer(BraintreeSyncedModel(braintree.Customer)):
         return self.full_name
 
     def braintree_key(self):
-        return str(self.id.pk)
+        return (str(self.id.pk),)
 
     @property
     def full_name(self):
@@ -147,7 +190,7 @@ class Customer(BraintreeSyncedModel(braintree.Customer)):
 
 
 class Address(BraintreeSyncedModel(braintree.Address)):
-    id = models.CharField(max_length=100, primary_key=True)
+    code = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(Customer, related_name='addresses')
 
     first_name = models.CharField(max_length=255, blank=True, null=True)
@@ -163,18 +206,18 @@ class Address(BraintreeSyncedModel(braintree.Address)):
     serialize_exclude = ('id',)
 
     def __unicode__(self):
-        return u'%s, %s %s' % (self.street_address, self.postal_code, self.locality)
+        return self.code
 
     def braintree_key(self):
-        return (str(self.customer.pk), self.id or '0')
+        return (str(self.customer.pk), self.code or '0')
 
     def serialize_create(self):
-        data = self.serialize(exclude=('id', 'customer'))
+        data = self.serialize(exclude=('id', 'code', 'customer'))
         data['customer_id'] = str(self.customer.pk)
         return data
 
     def serialize_update(self):
-        return self.serialize(exclude=('id', 'customer'))
+        return self.serialize(exclude=('id', 'code', 'customer'))
 
     @classmethod
     def unserialize(cls, data):
@@ -186,6 +229,48 @@ class Address(BraintreeSyncedModel(braintree.Address)):
         return address
 
     def on_pushed(self, result):
-        if not self.id == result.address.id:
-            self.delete()
-            self.id = result.address.id
+        if not self.code == result.address.id:
+            self.code = result.address.id
+
+
+class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
+    token = models.CharField(max_length=100, unique=True)
+    customer = models.ForeignKey(Customer, related_name='credit_cards')
+
+    default = models.NullBooleanField()
+
+    bin = models.IntegerField(blank=True, null=True)
+    last_4 = models.IntegerField(blank=True, null=True)
+    cardholder_name = models.CharField(max_length=255, blank=True, null=True)
+    expiration_month = models.IntegerField(blank=True, null=True)
+    expiration_year = models.IntegerField(blank=True, null=True)
+    expiration_date = models.CharField(max_length=255, blank=True, null=True)
+    masked_number = models.CharField(max_length=255, blank=True, null=True)
+    unique_number_identifier = models.CharField(max_length=255, blank=True, null=True)
+
+    country_of_issuance = models.CharField(max_length=255, blank=True, null=True)
+    issuing_bank = models.CharField(max_length=255, blank=True, null=True)
+
+    # There are more boolean fields in braintree available, yet i don't think
+    # We need them for now
+
+    def __unicode__(self):
+        return self.mask
+
+    @property
+    def mask(self):
+        if self.masked_number:
+            return self.masked_number
+        elif self.bin and self.last_4:
+            return '%s******%s' % (self.bin, self.last_4)
+        else:
+            return self.token
+
+    def braintree_key(self):
+        return (self.token or '0',)
+
+    def import_data(self, data):
+        for key, value in data.__dict__.iteritems():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        self.customer_id = int(data.customer_id)

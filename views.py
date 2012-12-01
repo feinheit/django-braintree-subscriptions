@@ -1,7 +1,7 @@
 import braintree
 import uuid
 
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
@@ -10,14 +10,15 @@ from django.utils.timezone import now
 from ..accounts import access
 
 from .utils import sync_customer
+from .models import CreditCard
 
 
 # TODO: Add decorator to directly receive customer in each view
 @access(access.MANAGER)
 def index(request):
-    #if not check_credit_card(request.user.access):
-
-    return redirect('payment_add_credit_card')
+    customer = request.access.customer
+    if not customer.braintree.credit_cards.count():
+        return redirect('payment_add_credit_card')
 
     #subscription = get_subscription(request.user.access)
 
@@ -72,41 +73,38 @@ def add_credit_card(request):
 
 @access(access.MANAGER)
 def confirm_credit_card(request):
+    customer = request.access.customer
+
+    try:
+        sync_customer(request.access.customer)
+    except ValidationError as e:
+        messages.error(request, e)
+        return redirect('payment_error')
+
     query_string = request.META['QUERY_STRING']
     result = braintree.TransparentRedirect.confirm(query_string)
 
-    customer = request.user.access.customer
-
     if result.is_success:
-        customer.braintree_creditcard_saved = now()
-        customer.save()
+        creditcard = CreditCard(
+            token=result.credit_card.token,
+            customer=customer.braintree
+        )
+        creditcard.full_clean()
+        creditcard.save()
         return redirect('payment_index')
     else:
         return render(request, 'payments/validation_error.html', {
             'result': result
         })
 
-"""
 
 @access(access.MANAGER)
-def delete_credit_card(request):
+def delete_credit_card(request, token):
+    card = get_object_or_404(CreditCard, token=token)
+    card.delete()
+    return redirect('payment_index')
 
-    # if not check_credit_card(request.user.access):
-    #     return redirect('payment_add_credit_card')
-
-    customer = request.user.access.customer
-
-    result = braintree.CreditCard.delete(customer.braintree_creditcard_token)
-
-    if result.is_success:
-        customer.braintree_creditcard_saved = now()
-        customer.save()
-        return redirect('payment_index')
-    else:
-        return render(request, 'payments/validation_error.html', {
-            'result': result
-        })
-
+"""
 
 @login_required
 @access(access.MANAGER)
