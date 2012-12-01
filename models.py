@@ -25,6 +25,7 @@ def BraintreeSyncedModel(braintree_collection):
         always_exclude = ('created', 'updated')
 
         class Meta:
+            get_latest_by = "created"
             abstract = True
 
         def braintree_key(self):
@@ -35,7 +36,7 @@ def BraintreeSyncedModel(braintree_collection):
             """ The shared serialization method """
             data = model_to_dict(self, exclude=self.always_exclude + exclude)
             for key, value in data.iteritems():
-                data[key] = unicode(value)
+                data[key] = unicode(value or '')
             return data
 
         def serialize_create(self):
@@ -59,13 +60,17 @@ def BraintreeSyncedModel(braintree_collection):
             """ Push this instance into the vault """
             key = self.braintree_key()
 
+            print "push"
+
             try:
                 data = self.serialize_update()
                 result = self.collection.update(*key, params=data)
+                print data
             except (NotFoundError, KeyError):
                 data = self.serialize_create()
                 result = self.collection.create(data)
                 self.created = now()
+                print data
 
             if not result.is_success:
                 raise ValidationError(result.message)

@@ -3,39 +3,38 @@ import uuid
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.utils.timezone import now
 
 from ..accounts import access
 
-from .utils import check_customer, check_credit_card, get_subscription
-
+from .utils import sync_customer
 
 
 # TODO: Add decorator to directly receive customer in each view
-
-@login_required
 @access(access.MANAGER)
 def index(request):
-    if not check_credit_card(request.user.access):
-        return redirect('payment_add_credit_card')
+    #if not check_credit_card(request.user.access):
 
-    subscription = get_subscription(request.user.access)
+    return redirect('payment_add_credit_card')
+
+    #subscription = get_subscription(request.user.access)
 
     return render(request, 'payments/index.html', {
-        'subscription': subscription
+        #'subscription': subscription
     })
 
 
-@login_required
 @access(access.MANAGER)
 def add_credit_card(request):
-    if not check_customer(request.user.access):
-        messages.error(request, 'Could not synchronize customer')
-        return redirect('payment_error')
+    customer = request.access.customer
 
-    customer = request.user.access.customer
+    try:
+        sync_customer(request.access.customer)
+    except ValidationError as e:
+        messages.error(request, e)
+        return redirect('payment_error')
 
     cc_token = str(uuid.uuid1())
 
@@ -59,8 +58,8 @@ def add_credit_card(request):
     months = ('%02d' % m for m in range(1, 13))
     upcomming_years = range(now().year, now().year + 10)
 
-    customer.braintree_creditcard_token = cc_token
-    customer.save()
+    #customer.braintree_creditcard_token = cc_token
+    #customer.save()
 
     return render(request, 'payments/add_card.html',  {
         "tr_data": tr_data,
@@ -71,7 +70,6 @@ def add_credit_card(request):
     })
 
 
-@login_required
 @access(access.MANAGER)
 def confirm_credit_card(request):
     query_string = request.META['QUERY_STRING']
@@ -88,13 +86,13 @@ def confirm_credit_card(request):
             'result': result
         })
 
+"""
 
-@login_required
 @access(access.MANAGER)
 def delete_credit_card(request):
 
-    if not check_credit_card(request.user.access):
-        return redirect('payment_add_credit_card')
+    # if not check_credit_card(request.user.access):
+    #     return redirect('payment_add_credit_card')
 
     customer = request.user.access.customer
 
@@ -115,8 +113,8 @@ def delete_credit_card(request):
 def subscribe_to_plan(request, plan_id):
     customer = request.user.access.customer
 
-    if not check_credit_card(request.user.access):
-        return redirect('payment_add_credit_card')
+    # if not check_credit_card(request.user.access):
+    #     return redirect('payment_add_credit_card')
 
     result = braintree.Subscription.create({
         "payment_method_token": customer.braintree_creditcard_token,
@@ -154,8 +152,9 @@ def unsubscribe(request):
         return render(request, 'payments/validation_error.html', {
             'result': result
         })
+"""
 
 
-@login_required
+@access(access.MANAGER)
 def error(request):
     return render(request, 'payments/error.html')

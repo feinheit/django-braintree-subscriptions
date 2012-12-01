@@ -1,47 +1,47 @@
 
-import braintree
-from braintree.exceptions.not_found_error import NotFoundError
+from .models import Customer, Address
 
 
-def check_customer(access):
-    user = access.user
-    customer = access.customer
+def sync_customer(customer):
+    """ Make sure the customer exists in the vault and is up to date"""
+    try:
+        bt_customer = Customer.objects.get(pk=customer.pk)
+    except Customer.DoesNotExist:
+        bt_customer = Customer()
+        bt_customer.id = customer
 
-    if not customer.braintree_created:
-        result = braintree.Customer.create({
-            "id": str(customer.id),
-            "first_name": customer.first_name,
-            "last_name": customer.last_name,
-            "company": customer.company,
-            "email": user.email
-        })
+    print customer.modified
+    print bt_customer.updated
 
-        if result.is_success:
-            customer.braintree_created = now()
-            customer.braintree_updated = now()
-            customer.save()
+    if not bt_customer.created or customer.modified > bt_customer.updated:
+        bt_customer.first_name = customer.first_name
+        bt_customer.last_name = customer.last_name
+        bt_customer.company = customer.company
 
-    if customer.braintree_created and not customer.braintree_address_id:
-        result = braintree.Address.create({
-            "customer_id": str(customer.id),
-            "first_name": customer.first_name,
-            "last_name": customer.last_name,
-            "company": customer.company,
-            "street_address": customer.street,
-            #"extended_address": "Suite 403",
-            "locality": customer.city,
-            "region": customer.state,
-            "postal_code": customer.zip_code,
-            "country_code_alpha2": customer.country.code
-        })
+        bt_customer.push()
+        bt_customer.save()
 
-        if result.is_success:
-            customer.braintree_address_id = result.address.id
-            customer.save()
+    try:
+        bt_address = bt_customer.addresses.latest()
+    except Address.DoesNotExist:
+        bt_address = Address()
+        bt_address.customer = bt_customer
 
-    return customer.braintree_created and customer.braintree_address_id
+    if not bt_address.created or customer.modified > bt_address.updated:
+        bt_address.first_name = customer.first_name
+        bt_address.last_name = customer.last_name
+        bt_address.company = customer.company
+        bt_address.street_address = customer.street
+        bt_address.locality = customer.city
+        bt_address.region = customer.state
+        bt_address.postal_code = customer.zip_code
+        bt_address.country_code_alpha2 = customer.country.code
+
+        bt_address.push()
+        bt_address.save()
 
 
+"""
 def check_credit_card(access):
     customer = access.customer
 
@@ -76,4 +76,4 @@ def get_subscription(access):
             customer.save()
 
     return None
-
+"""
