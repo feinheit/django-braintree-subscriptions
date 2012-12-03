@@ -1,0 +1,70 @@
+#card_number {
+    width: 180px;
+    background-image: url('cards/generic.png');
+    background-repeat: no-repeat;
+    background-position: 158px 4px;
+}
+
+#card_number.visa {
+  background-image: url('cards/visa.png');
+}
+
+#card_number.mastercard {
+  background-image: url('cards/mastercard.png');
+}
+
+#card_number.amex {
+  background-image: url('cards/amex.png');
+}
+
+#card_number.discover {
+  background-image: url('cards/discover.png');
+}
+
+#expiration_month {
+    width: 30px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+    margin-right: -2px;
+}
+
+#expiration_year {
+    width: 40px;
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+    margin-left: -3px;
+}
+
+#cardholder_name {
+    width: 180px;
+}
+
+#cvv {
+    width: 82px;
+}
+
+.control-group.left {
+    width: 400px;
+}
+
+.control-group.left .control-label {
+    width: 150px;
+}
+
+.control-group.left .controls {
+    margin-left: 160px;
+}
+
+
+.control-group.right {
+    float: left;
+    width: 250px;
+}
+
+.control-group.right .control-label {
+    width: 70px;
+}
+
+.control-group.right .controls {
+    margin-left: 80px;
+}
