@@ -1,6 +1,25 @@
 (function() {
   $(function() {
-    return $('#card_number').validateCreditCard(function(result) {
+
+    $('input').not('#card_number').keyup(function () {
+      var $group = $(this).parents('.control-group');
+
+      var all_valid = true;
+      $group.find('input').each(function(i, e) {
+          if (!e.validity.valid || !$(e).val()) {
+            all_valid = false;
+            return false;
+          }
+      })
+
+      if(all_valid) {
+        $group.addClass('success');
+      } else {
+        $group.removeClass('success');
+      }
+    });
+
+    $('#card_number').validateCreditCard(function(result) {
       var $card_number = $('#card_number');
 
       var card_class = null;
@@ -21,9 +40,9 @@
       $card_number.removeClass().addClass(card_class);
 
       if (result.length_valid && result.luhn_valid) {
-        return $card_number.addClass('valid');
+        return $('#card_control').addClass('success');
       } else {
-        return $card_number.removeClass('valid');
+        return $('#card_control').removeClass('success');
       }
     });
   });
