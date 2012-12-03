@@ -56,18 +56,9 @@ def add_credit_card(request):
 
     braintree_url = braintree.TransparentRedirect.url()
 
-    months = ('%02d' % m for m in range(1, 13))
-    upcomming_years = range(now().year, now().year + 10)
-
-    #customer.braintree_creditcard_token = cc_token
-    #customer.save()
-
     return render(request, 'payments/add_card.html',  {
         "tr_data": tr_data,
         "braintree_url": braintree_url,
-        "months": months,
-        "years": upcomming_years,
-
     })
 
 
