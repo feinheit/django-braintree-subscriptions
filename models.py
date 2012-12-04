@@ -136,7 +136,7 @@ def BraintreeMirroredModel(braintree_collection):
         def clean(self):
             try:
                 self.import_from_vault()
-            except (NotFoundError, KeyError):
+            except ObjectDoesNotExist:
                 self.reset_fields()
 
         def reset_fields(self):
@@ -147,8 +147,22 @@ def BraintreeMirroredModel(braintree_collection):
         def import_from_vault(self):
             """ Copy data from vault and set on all fields """
             key = self.braintree_key()
-            data = self.collection.find(*key)
-            self.import_data(data)
+            data = None
+            if hasattr(self.collection, 'find'):
+                try:
+                    data = self.collection.find(*key)
+                except (NotFoundError, KeyError):
+                    pass
+            else:
+                for obj in self.collection.all():
+                    if obj.id == key[0]:
+                        data = obj
+
+            if data:
+                self.import_data(data)
+            else:
+                msg = "Object %s not found in vault" % key[0]
+                raise ObjectDoesNotExist(msg)
 
         def import_data(self, data):
             """ How the data from the vault into the instance """
@@ -158,10 +172,11 @@ def BraintreeMirroredModel(braintree_collection):
     def delete_in_vault(sender, instance, **kwargs):
         """ Delete all instance in the vault """
         if issubclass(sender, BTMirroredModel):
-            try:
-                braintree_collection.delete(*instance.braintree_key())
-            except (NotFoundError, KeyError):
-                pass
+            if hasattr(braintree_collection, 'delete'):
+                try:
+                    braintree_collection.delete(*instance.braintree_key())
+                except (NotFoundError, KeyError):
+                    pass
 
     return BTMirroredModel
 
@@ -274,3 +289,41 @@ class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
             if hasattr(self, key):
                 setattr(self, key, value)
         self.customer_id = int(data.customer_id)
+
+
+class Plan(BraintreeMirroredModel(braintree.Plan)):
+    plan = models.CharField(max_length=100, unique=True)
+
+    name = models.CharField(max_length=100, editable=False, blank=True, null=True)
+    description = models.TextField(editable=False, blank=True, null=True)
+    price = models.DecimalField(max_digits=5, decimal_places=2, editable=False,
+        blank=True, null=True)
+    currency_iso_code = models.CharField(max_length=100, editable=False, blank=True, null=True)
+
+    billing_day_of_month = models.IntegerField(editable=False, blank=True, null=True)
+    billing_frequency = models.IntegerField(editable=False, blank=True, null=True,
+        help_text='in months')
+    number_of_billing_cycles = models.IntegerField(editable=False, blank=True, null=True)
+
+    trial_period = models.NullBooleanField(editable=False)
+    trial_duration = models.IntegerField(editable=False, blank=True, null=True)
+    trial_duration_unit = models.CharField(max_length=100, editable=False, blank=True, null=True)
+
+    # Timestamp from braintree
+    created_at = models.DateTimeField(editable=False, blank=True, null=True)
+    updated_at = models.DateTimeField(editable=False, blank=True, null=True)
+
+    def __unicode__(self):
+        return self.name if self.name else self.plan
+
+    def braintree_key(self):
+        return (self.plan,)
+
+    def import_data(self, data):
+        for key, value in data.__dict__.iteritems():
+            if hasattr(self, key) and key != 'id':
+                setattr(self, key, value)
+
+    @property
+    def price_display(self):
+        return u'%s %s', (self.price, self.currency_iso_code)
