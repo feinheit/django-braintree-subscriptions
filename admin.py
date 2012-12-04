@@ -1,7 +1,20 @@
-from django import forms
 from django.contrib import admin
 
 from .models import Customer, Address, CreditCard, Plan
+
+
+class MirroredBrainteeModelAdminMixin(object):
+    def get_readonly_fields(self, request, obj=None):
+        """ show all cached fields as readonly in admin """
+        if hasattr(self, '_readonly_fields'):
+            return self._readonly_fields
+        self._readonly_fields = []
+
+        for field in self.model._meta.fields:
+            if not field.editable:
+                self._readonly_fields.append(field.name)
+
+        return self._readonly_fields
 
 
 class AddressInlineAdmin(admin.StackedInline):
@@ -9,22 +22,9 @@ class AddressInlineAdmin(admin.StackedInline):
     extra = 0
 
 
-class CreditCardInline(admin.StackedInline):
+class CreditCardInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
     model = CreditCard
     extra = 0
-    readonly_fields = (
-        'default',
-        'bin',
-        'last_4',
-        'cardholder_name',
-        'expiration_month',
-        'expiration_year',
-        'expiration_date',
-        'masked_number',
-        'unique_number_identifier',
-        'country_of_issuance',
-        'issuing_bank',
-    )
 
 
 class CustomerAdmin(admin.ModelAdmin):
@@ -48,34 +48,8 @@ class CustomerAdmin(admin.ModelAdmin):
     pull.short_description = 'Pull data from braintree'
 
 
-class PlanAdminForm(forms.ModelForm):
-    class Meta:
-        model = Plan
-        exclude = ('name',)
-
-
-class PlanAdmin(admin.ModelAdmin):
-    form = PlanAdminForm
+class PlanAdmin(MirroredBrainteeModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
-
-    def get_readonly_fields(self, request, obj=None):
-        if obj:
-            return (
-                'name',
-                'description',
-                'price',
-                'currency_iso_code',
-                'billing_day_of_month',
-                'billing_frequency',
-                'number_of_billing_cycles',
-                'trial_period',
-                'trial_duration',
-                'trial_duration_unit',
-                'created_at',
-                'updated_at'
-            )
-        else:
-            return ()
 
 
 admin.site.register(Customer, CustomerAdmin)

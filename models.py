@@ -10,6 +10,10 @@ from django.forms.models import model_to_dict
 from django.utils.timezone import now
 
 
+# Common attributes for cached fields
+CACHED = {'editable': False, 'blank': True, 'null': True}
+
+
 def BraintreeSyncedModel(braintree_collection):
     """ A django model for 2-way sync with the braintree vault """
 
@@ -252,19 +256,19 @@ class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
     token = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(Customer, related_name='credit_cards')
 
-    default = models.NullBooleanField()
+    default = models.NullBooleanField(**CACHED)
 
-    bin = models.IntegerField(blank=True, null=True)
-    last_4 = models.IntegerField(blank=True, null=True)
-    cardholder_name = models.CharField(max_length=255, blank=True, null=True)
-    expiration_month = models.IntegerField(blank=True, null=True)
-    expiration_year = models.IntegerField(blank=True, null=True)
-    expiration_date = models.CharField(max_length=255, blank=True, null=True)
-    masked_number = models.CharField(max_length=255, blank=True, null=True)
-    unique_number_identifier = models.CharField(max_length=255, blank=True, null=True)
+    bin = models.IntegerField(**CACHED)
+    last_4 = models.IntegerField(**CACHED)
+    cardholder_name = models.CharField(max_length=255, **CACHED)
+    expiration_month = models.IntegerField(**CACHED)
+    expiration_year = models.IntegerField(**CACHED)
+    expiration_date = models.CharField(max_length=255, **CACHED)
+    masked_number = models.CharField(max_length=255, **CACHED)
+    unique_number_identifier = models.CharField(max_length=255, **CACHED)
 
-    country_of_issuance = models.CharField(max_length=255, blank=True, null=True)
-    issuing_bank = models.CharField(max_length=255, blank=True, null=True)
+    country_of_issuance = models.CharField(max_length=255, **CACHED)
+    issuing_bank = models.CharField(max_length=255, **CACHED)
 
     # There are more boolean fields in braintree available, yet i don't think
     # We need them for now
@@ -294,24 +298,22 @@ class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
 class Plan(BraintreeMirroredModel(braintree.Plan)):
     plan = models.CharField(max_length=100, unique=True)
 
-    name = models.CharField(max_length=100, editable=False, blank=True, null=True)
-    description = models.TextField(editable=False, blank=True, null=True)
-    price = models.DecimalField(max_digits=5, decimal_places=2, editable=False,
-        blank=True, null=True)
-    currency_iso_code = models.CharField(max_length=100, editable=False, blank=True, null=True)
+    name = models.CharField(max_length=100, **CACHED)
+    description = models.TextField(**CACHED)
+    price = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    currency_iso_code = models.CharField(max_length=100, **CACHED)
 
-    billing_day_of_month = models.IntegerField(editable=False, blank=True, null=True)
-    billing_frequency = models.IntegerField(editable=False, blank=True, null=True,
-        help_text='in months')
-    number_of_billing_cycles = models.IntegerField(editable=False, blank=True, null=True)
+    billing_day_of_month = models.IntegerField(**CACHED)
+    billing_frequency = models.IntegerField(help_text='in months', **CACHED)
+    number_of_billing_cycles = models.IntegerField(**CACHED)
 
-    trial_period = models.NullBooleanField(editable=False)
-    trial_duration = models.IntegerField(editable=False, blank=True, null=True)
-    trial_duration_unit = models.CharField(max_length=100, editable=False, blank=True, null=True)
+    trial_period = models.NullBooleanField(**CACHED)
+    trial_duration = models.IntegerField(**CACHED)
+    trial_duration_unit = models.CharField(max_length=100, **CACHED)
 
     # Timestamp from braintree
-    created_at = models.DateTimeField(editable=False, blank=True, null=True)
-    updated_at = models.DateTimeField(editable=False, blank=True, null=True)
+    created_at = models.DateTimeField(**CACHED)
+    updated_at = models.DateTimeField(**CACHED)
 
     def __unicode__(self):
         return self.name if self.name else self.plan
