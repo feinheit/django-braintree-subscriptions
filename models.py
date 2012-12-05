@@ -3,7 +3,7 @@ from braintree.exceptions.not_found_error import NotFoundError
 
 from django.db import models
 from django.db.models.fields.related import RelatedField, RelatedObject
-from django.db.models.signals import pre_delete
+from django.db.models.signals import pre_delete, pre_save, post_save
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.forms.models import model_to_dict
@@ -137,19 +137,19 @@ def BraintreeMirroredModel(braintree_collection):
             """ A represantion of how this instance is indexed in the vault """
             raise NotImplementedError('braintree_key() not implemented')
 
-        def clean(self):
-            try:
-                self.import_from_vault()
-            except ObjectDoesNotExist:
-                self.reset_fields()
-
         def reset_fields(self):
-            for field in self._meta.fields:
-                if getattr(field, 'null', False):
+            for field_name in self._meta.get_all_field_names():
+                field = self._meta.get_field_by_name(field_name)[0]
+                if issubclass(field.__class__, RelatedObject):
+                    # TODO: CLEAN THIS UP
+                    # Unfortunatley, this doesn't when form are alread initialized
+                    #field.model.objects.all().delete()
+                    pass
+                elif not getattr(field, 'editable', True):
                     setattr(self, field.name, None)
 
-        def import_from_vault(self):
-            """ Copy data from vault and set on all fields """
+        def get_data_from_vault(self):
+            """ Get data from vault """
             key = self.braintree_key()
             data = None
             if hasattr(self.collection, 'find'):
@@ -161,16 +161,35 @@ def BraintreeMirroredModel(braintree_collection):
                 for obj in self.collection.all():
                     if obj.id == key[0]:
                         data = obj
-
-            if data:
-                self.import_data(data)
-            else:
-                msg = "Object %s not found in vault" % key[0]
-                raise ObjectDoesNotExist(msg)
+            return data
 
         def import_data(self, data):
             """ How the data from the vault into the instance """
             raise NotImplementedError('import_data(data) not implemented')
+
+        def import_related(self, data):
+            """ import related objects from vault """
+            pass
+
+    @receiver(pre_save, weak=False)
+    def receive_from_vault(sender, instance, **kwargs):
+        """ Receive and update fields from vault before saving """
+        if issubclass(sender, BTMirroredModel):
+            data = instance.get_data_from_vault()
+            if data:
+                instance.import_data(data)
+            else:
+                instance.reset_fields()
+
+    @receiver(post_save, weak=False)
+    def receive_related_from_vault(sender, instance, **kwargs):
+        """ Receive and created related objects """
+        if issubclass(sender, BTMirroredModel):
+            data = instance.get_data_from_vault()
+            if data:
+                instance.import_related(data)
+            else:
+                instance.reset_fields()
 
     @receiver(pre_delete, weak=False)
     def delete_in_vault(sender, instance, **kwargs):
@@ -296,7 +315,7 @@ class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
 
 
 class Plan(BraintreeMirroredModel(braintree.Plan)):
-    plan = models.CharField(max_length=100, unique=True)
+    plan_id = models.CharField(max_length=100, unique=True)
 
     name = models.CharField(max_length=100, **CACHED)
     description = models.TextField(**CACHED)
@@ -316,16 +335,83 @@ class Plan(BraintreeMirroredModel(braintree.Plan)):
     updated_at = models.DateTimeField(**CACHED)
 
     def __unicode__(self):
-        return self.name if self.name else self.plan
+        return self.name if self.name else self.plan_id
 
     def braintree_key(self):
-        return (self.plan,)
+        return (self.plan_id,)
 
     def import_data(self, data):
         for key, value in data.__dict__.iteritems():
             if hasattr(self, key) and key != 'id':
-                setattr(self, key, value)
+                field = self._meta.get_field_by_name(key)[0]
+                if not issubclass(field.__class__, RelatedObject):
+                    setattr(self, key, value)
+
+    # Addons and Discounts
+    def import_related(self, data):
+        for key, value in data.__dict__.iteritems():
+            if hasattr(self, key) and key != 'id':
+                field = self._meta.get_field_by_name(key)[0]
+                if issubclass(field.__class__, RelatedObject):
+                    field.model.import_related(self, value)
 
     @property
     def price_display(self):
         return u'%s %s', (self.price, self.currency_iso_code)
+
+
+class AddOn(models.Model):
+    plan = models.ForeignKey(Plan, related_name='add_ons')
+    addon_id = models.CharField(max_length=255, unique=True, **CACHED)
+
+    name = models.CharField(max_length=255, **CACHED)
+    description = models.TextField(**CACHED)
+    amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    number_of_billing_cycles = models.IntegerField(**CACHED)
+
+    def __unicode__(self):
+        return self.name if self.name else self.addon_id
+
+    @classmethod
+    def import_related(cls, plan, addons):
+        for addon in addons:
+            try:
+                instance = AddOn.objects.get(plan=plan, addon_id=addon.id)
+            except AddOn.DoesNotExist:
+                instance = AddOn(plan=plan, addon_id=addon.id)
+
+            for key, value in addon.__dict__.iteritems():
+                if hasattr(instance, key) and key != 'id':
+                    setattr(instance, key, value)
+
+            instance.save()
+
+
+class Discount(models.Model):
+    plan = models.ForeignKey(Plan, related_name='discounts')
+    discount_id = models.CharField(max_length=255, unique=True, **CACHED)
+
+    name = models.CharField(max_length=255, **CACHED)
+    description = models.TextField(**CACHED)
+    amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    number_of_billing_cycles = models.IntegerField(**CACHED)
+
+    def __unicode__(self):
+        return self.name if self.name else self.discount_id
+
+    @classmethod
+    def import_related(cls, plan, discounts):
+        for discount in discounts:
+            try:
+                instance = Discount.objects.get(
+                    plan=plan,
+                    discount_id=discount.id
+                )
+            except Discount.DoesNotExist:
+                instance = Discount(plan=plan, discount_id=discount.id)
+
+            for key, value in discount.__dict__.iteritems():
+                if hasattr(instance, key) and key != 'id':
+                    setattr(instance, key, value)
+
+            instance.save()

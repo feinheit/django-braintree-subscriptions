@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Customer, Address, CreditCard, Plan
+from .models import Customer, Address, CreditCard, Plan, AddOn, Discount
 
 
 class MirroredBrainteeModelAdminMixin(object):
@@ -48,8 +48,23 @@ class CustomerAdmin(admin.ModelAdmin):
     pull.short_description = 'Pull data from braintree'
 
 
+class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
+    model = AddOn
+
+    def has_add_permission(self, request):
+        return False
+
+
+class DiscountInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
+    model = Discount
+
+    def has_add_permission(self, request):
+        return False
+
+
 class PlanAdmin(MirroredBrainteeModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
+    inlines = (AddOnInline, DiscountInline)
 
 
 admin.site.register(Customer, CustomerAdmin)
