@@ -3,7 +3,7 @@ from braintree.exceptions.not_found_error import NotFoundError
 
 from django.db import models
 from django.db.models.fields.related import RelatedField, RelatedObject
-from django.db.models.signals import pre_delete, pre_save, post_save
+from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.forms.models import model_to_dict
@@ -15,6 +15,8 @@ CACHED = {'editable': False, 'blank': True, 'null': True}
 
 
 def BraintreeSyncedModel(braintree_collection):
+    # TODO: Remove auto save on clean methods
+
     """ A django model for 2-way sync with the braintree vault """
 
     class BTSyncedModel(models.Model):
@@ -133,35 +135,39 @@ def BraintreeMirroredModel(braintree_collection):
         class Meta:
             abstract = True
 
+        def __init__(self, *args, **kwargs):
+            super(BTMirroredModel, self).__init__(*args, **kwargs)
+
+            # data is the last received representation from braintree
+            # when get_data_from_vault() is called
+            self.data = None
+
         def braintree_key(self):
             """ A represantion of how this instance is indexed in the vault """
             raise NotImplementedError('braintree_key() not implemented')
 
         def reset_fields(self):
-            for field_name in self._meta.get_all_field_names():
-                field = self._meta.get_field_by_name(field_name)[0]
-                if issubclass(field.__class__, RelatedObject):
-                    # TODO: CLEAN THIS UP
-                    # Unfortunatley, this doesn't when form are alread initialized
-                    #field.model.objects.all().delete()
-                    pass
-                elif not getattr(field, 'editable', True):
+            """ empty all cached fields from the model """
+            for field in self._meta.fields:
+                is_editable = getattr(field, 'editable', True)
+                is_nullable = getattr(field, 'null', False)
+                if is_nullable and not is_editable:
                     setattr(self, field.name, None)
 
         def get_data_from_vault(self):
-            """ Get data from vault """
+            """ Get object data from vault """
             key = self.braintree_key()
-            data = None
             if hasattr(self.collection, 'find'):
                 try:
-                    data = self.collection.find(*key)
+                    self.data = self.collection.find(*key)
                 except (NotFoundError, KeyError):
                     pass
             else:
-                for obj in self.collection.all():
-                    if obj.id == key[0]:
-                        data = obj
-            return data
+                find_by_id = lambda obj: obj.id == key[0]
+                found = filter(find_by_id, self.collection.all())
+                self.data = found[0] if found else None
+
+            return self.data
 
         def import_data(self, data):
             """ How the data from the vault into the instance """
@@ -169,35 +175,30 @@ def BraintreeMirroredModel(braintree_collection):
 
         def import_related(self, data):
             """ import related objects from vault """
-            pass
+            raise NotImplementedError('import_releated(data) not implemented')
 
-    @receiver(pre_save, weak=False)
-    def receive_from_vault(sender, instance, **kwargs):
-        """ Receive and update fields from vault before saving """
-        if issubclass(sender, BTMirroredModel):
-            data = instance.get_data_from_vault()
-            if data:
-                instance.import_data(data)
+        def pull(self):
+            self.get_data_from_vault()
+            if self.data:
+                self.import_data(self.data)
             else:
-                instance.reset_fields()
+                self.reset_fields()
 
-    @receiver(post_save, weak=False)
-    def receive_related_from_vault(sender, instance, **kwargs):
-        """ Receive and created related objects """
-        if issubclass(sender, BTMirroredModel):
-            data = instance.get_data_from_vault()
-            if data:
-                instance.import_related(data)
-            else:
-                instance.reset_fields()
+        def pull_related(self):
+            if not self.data:
+                self.get_data_from_vault()
 
-    @receiver(pre_delete, weak=False)
-    def delete_in_vault(sender, instance, **kwargs):
-        """ Delete all instance in the vault """
-        if issubclass(sender, BTMirroredModel):
-            if hasattr(braintree_collection, 'delete'):
+            for field_name in self._meta.get_all_field_names():
+                field = self._meta.get_field_by_name(field_name)[0]
+                if issubclass(field.__class__, RelatedObject):
+                    related_objects = getattr(self.data, field_name, ())
+                    field.model.import_related(self, related_objects)
+
+        def delete_from_vault(self):
+            """ Remove object from vault if present """
+            if hasattr(self.braintree_collection, 'delete'):
                 try:
-                    braintree_collection.delete(*instance.braintree_key())
+                    self.braintree_collection.delete(*self.braintree_key())
                 except (NotFoundError, KeyError):
                     pass
 
@@ -369,22 +370,28 @@ class AddOn(models.Model):
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
+    mark_for_delete = models.BooleanField(editable=False)
+
     def __unicode__(self):
         return self.name if self.name else self.addon_id
 
     @classmethod
     def import_related(cls, plan, addons):
+        plan.add_ons.update(mark_for_delete=True)
+
         for addon in addons:
             try:
                 instance = AddOn.objects.get(plan=plan, addon_id=addon.id)
             except AddOn.DoesNotExist:
                 instance = AddOn(plan=plan, addon_id=addon.id)
 
+            instance.mark_for_delete = False
             for key, value in addon.__dict__.iteritems():
                 if hasattr(instance, key) and key != 'id':
                     setattr(instance, key, value)
-
             instance.save()
+
+        plan.add_ons.filter(mark_for_delete=True).delete()
 
 
 class Discount(models.Model):
@@ -396,11 +403,15 @@ class Discount(models.Model):
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
+    mark_for_delete = models.BooleanField(editable=False)
+
     def __unicode__(self):
         return self.name if self.name else self.discount_id
 
     @classmethod
     def import_related(cls, plan, discounts):
+        plan.discounts.update(mark_for_delete=True)
+
         for discount in discounts:
             try:
                 instance = Discount.objects.get(
@@ -410,8 +421,10 @@ class Discount(models.Model):
             except Discount.DoesNotExist:
                 instance = Discount(plan=plan, discount_id=discount.id)
 
+            instance.mark_for_delete = False
             for key, value in discount.__dict__.iteritems():
                 if hasattr(instance, key) and key != 'id':
                     setattr(instance, key, value)
-
             instance.save()
+
+        plan.add_ons.filter(mark_for_delete=True).delete()

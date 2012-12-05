@@ -80,7 +80,7 @@ def confirm_credit_card(request):
             token=result.credit_card.token,
             customer=customer.braintree
         )
-        creditcard.full_clean()
+        creditcard.pull()
         creditcard.save()
         return redirect('payment_index')
     else:

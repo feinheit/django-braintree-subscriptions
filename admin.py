@@ -11,10 +11,26 @@ class MirroredBrainteeModelAdminMixin(object):
         self._readonly_fields = []
 
         for field in self.model._meta.fields:
-            if not field.editable:
+            if field.null and not field.editable:
                 self._readonly_fields.append(field.name)
 
         return self._readonly_fields
+
+    def save_model(self, request, obj, form, change):
+        obj.pull()
+        obj.save()
+
+    def delete_model(self, request, obj):
+        obj.delete_from_vault()
+        obj.delete()
+
+    def save_related(self, request, form, formsets, change):
+        form.save_m2m()
+        for formset in formsets:
+            self.save_formset(request, form, formset, change=change)
+
+        if form.instance:
+            form.instance.pull_related()
 
 
 class AddressInlineAdmin(admin.StackedInline):
@@ -54,6 +70,8 @@ class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
     def has_add_permission(self, request):
         return False
 
+    def has_delete_permission(self, request, obj):
+        return False
 
 class DiscountInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
     model = Discount
@@ -61,11 +79,13 @@ class DiscountInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
     def has_add_permission(self, request):
         return False
 
+    def has_delete_permission(self, request, obj):
+        return False
+
 
 class PlanAdmin(MirroredBrainteeModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
     inlines = (AddOnInline, DiscountInline)
-
 
 admin.site.register(Customer, CustomerAdmin)
 admin.site.register(Plan, PlanAdmin)
