@@ -3,7 +3,7 @@ import braintree
 from django.db import models
 from django.db.models.fields.related import RelatedObject
 
-from .sync import BraintreeSyncedModel, BraintreeMirroredModel
+from .sync import BTSyncedModel, BTMirroredModel
 
 
 # Common attributes sets for fields
@@ -11,7 +11,9 @@ NULLABLE = {'blank': True, 'null': True}
 CACHED = {'editable': False, 'blank': True, 'null': True}
 
 
-class Customer(BraintreeSyncedModel(braintree.Customer)):
+class Customer(BTSyncedModel):
+    collection = braintree.Customer
+
     id = models.OneToOneField('customers.Customer',
         related_name='braintree', primary_key=True)
 
@@ -39,7 +41,9 @@ class Customer(BraintreeSyncedModel(braintree.Customer)):
         return u'%s %s' % (self.first_name, self.last_name)
 
 
-class Address(BraintreeSyncedModel(braintree.Address)):
+class Address(BTSyncedModel):
+    collection = braintree.Address
+
     code = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(Customer, related_name='addresses')
 
@@ -83,7 +87,9 @@ class Address(BraintreeSyncedModel(braintree.Address)):
             self.code = result.address.id
 
 
-class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
+class CreditCard(BTMirroredModel):
+    collection = braintree.CreditCard
+
     token = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(Customer, related_name='credit_cards')
 
@@ -126,7 +132,9 @@ class CreditCard(BraintreeMirroredModel(braintree.CreditCard)):
         self.customer_id = int(data.customer_id)
 
 
-class Plan(BraintreeMirroredModel(braintree.Plan)):
+class Plan(BTMirroredModel):
+    collection = braintree.Plan
+
     plan_id = models.CharField(max_length=100, unique=True)
 
     name = models.CharField(max_length=100, **CACHED)
