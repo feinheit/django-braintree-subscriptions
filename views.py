@@ -3,7 +3,7 @@ import uuid
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.utils.timezone import now
 
@@ -17,8 +17,13 @@ from .models import CreditCard
 @access(access.MANAGER)
 def index(request):
     customer = request.access.customer
-    if not customer.braintree.credit_cards.count():
+
+    try:
+        btcustomer = customer.braintree
+        btcustomer.credit_cards.latest('id')
+    except ObjectDoesNotExist:
         return redirect('payment_add_credit_card')
+
 
     #subscription = get_subscription(request.user.access)
 

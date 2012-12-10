@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 
-from .models import Customer, Address, CreditCard, Plan, AddOn, Discount
+import models
 
 
 class SyncedBraintreeModelAdminMixin(object):
@@ -67,13 +67,13 @@ class MirroredBrainteeModelAdminMixin(object):
 
 
 class AddressInlineAdmin(SyncedBraintreeModelAdminMixin, admin.StackedInline):
-    model = Address
+    model = models.Address
     readonly_fields = ('code',)
     extra = 0
 
 
 class CreditCardInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
-    model = CreditCard
+    model = models.CreditCard
     extra = 0
 
 
@@ -94,7 +94,7 @@ class CustomerAdmin(SyncedBraintreeModelAdminMixin, admin.ModelAdmin):
 
 
 class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
-    model = AddOn
+    model = models.AddOn
 
     def has_add_permission(self, request):
         return False
@@ -104,7 +104,7 @@ class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
 
 
 class DiscountInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
-    model = Discount
+    model = models.Discount
 
     def has_add_permission(self, request):
         return False
@@ -117,5 +117,11 @@ class PlanAdmin(MirroredBrainteeModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
     inlines = (AddOnInline, DiscountInline)
 
-admin.site.register(Customer, CustomerAdmin)
-admin.site.register(Plan, PlanAdmin)
+
+class SubscriptionAdmin(SyncedBraintreeModelAdminMixin, admin.ModelAdmin):
+    list_filter = ('plan_id',)
+    readonly_fields = ('subscription_id',)
+
+admin.site.register(models.Customer, CustomerAdmin)
+admin.site.register(models.Plan, PlanAdmin)
+admin.site.register(models.Subscription, SubscriptionAdmin)

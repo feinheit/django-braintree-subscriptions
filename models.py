@@ -2,6 +2,7 @@ import braintree
 
 from django.db import models
 from django.db.models.fields.related import RelatedObject
+from django.forms.models import model_to_dict
 
 from .sync import BTSyncedModel, BTMirroredModel
 
@@ -189,14 +190,12 @@ class AddOn(models.Model):
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
-    mark_for_delete = models.BooleanField(editable=False)
-
     def __unicode__(self):
         return self.name if self.name else self.addon_id
 
     @classmethod
     def import_related(cls, plan, addons):
-        plan.add_ons.update(mark_for_delete=True)
+        saved_ids = []
 
         for addon in addons:
             try:
@@ -204,13 +203,13 @@ class AddOn(models.Model):
             except AddOn.DoesNotExist:
                 instance = AddOn(plan=plan, addon_id=addon.id)
 
-            instance.mark_for_delete = False
             for key, value in addon.__dict__.iteritems():
                 if hasattr(instance, key) and key != 'id':
                     setattr(instance, key, value)
             instance.save()
+            saved_ids.append(instance.id)
 
-        plan.add_ons.filter(mark_for_delete=True).delete()
+        plan.add_ons.exclude(pk__in=saved_ids).delete()
 
 
 class Discount(models.Model):
@@ -222,14 +221,12 @@ class Discount(models.Model):
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
-    mark_for_delete = models.BooleanField(editable=False)
-
     def __unicode__(self):
         return self.name if self.name else self.discount_id
 
     @classmethod
     def import_related(cls, plan, discounts):
-        plan.discounts.update(mark_for_delete=True)
+        saved_ids = []
 
         for discount in discounts:
             try:
@@ -240,10 +237,50 @@ class Discount(models.Model):
             except Discount.DoesNotExist:
                 instance = Discount(plan=plan, discount_id=discount.id)
 
-            instance.mark_for_delete = False
             for key, value in discount.__dict__.iteritems():
                 if hasattr(instance, key) and key != 'id':
                     setattr(instance, key, value)
             instance.save()
+            saved_ids.append(instance.id)
 
-        plan.add_ons.filter(mark_for_delete=True).delete()
+        # Delte all untouched ids
+        plan.discounts.exclude(pk__in=saved_ids).delete()
+
+
+class Subscription(BTSyncedModel):
+    collection = braintree.Subscription
+
+    subscription_id = models.CharField(max_length=255)
+    payment_method_token = models.CharField(max_length=255)
+    plan_id = models.CharField(max_length=255)
+
+    # Overriden details
+    price = models.DecimalField(max_digits=5, decimal_places=2, **NULLABLE)
+    number_of_billing_cycles = models.IntegerField(**NULLABLE)
+
+    trial_period = models.NullBooleanField()
+    trial_duration = models.IntegerField(**NULLABLE)
+    trial_duration_unit = models.CharField(max_length=255, **NULLABLE)
+
+    first_billing_date = models.DateField(**NULLABLE)
+    billing_day_of_month = models.IntegerField(**NULLABLE)
+    start_immediately = models.NullBooleanField()
+
+    def braintree_key(self):
+        return (self.subscription_id,)
+
+    def on_pushed(self, result):
+        self.subscription_id = result.subscription.id
+
+    def serialize_create(self):
+        data = self.serialize(exclude=('id', 'subscription_id'))
+        data.update({
+            'options': {
+                'do_not_inherit_add_ons_or_discounts': True
+            }
+        })
+        return data
+
+    def serialize_update(self):
+        return self.serialize(exclude=('id', 'subscription_id'))
+

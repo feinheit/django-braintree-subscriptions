@@ -1,5 +1,6 @@
 import braintree
 from braintree.exceptions.not_found_error import NotFoundError
+from braintree.exceptions.unexpected_error import UnexpectedError
 
 from django.db import models
 from django.db.models.fields.related import RelatedField, RelatedObject
@@ -36,8 +37,12 @@ class BTSyncedModel(models.Model):
     def serialize(self, exclude=()):
         """ The shared serialization method """
         data = model_to_dict(self, exclude=self.always_exclude + exclude)
-        for key, value in data.iteritems():
-            data[key] = unicode(value or '')
+        for key in data.keys():
+            value = data[key]
+            if value:
+                data[key] = unicode(value)
+            else:
+                del data[key]
         return data
 
     def serialize_create(self):
@@ -64,7 +69,7 @@ class BTSyncedModel(models.Model):
         try:
             data = self.serialize_update()
             result = self.collection.update(*key, params=data)
-        except (NotFoundError, KeyError):
+        except (NotFoundError, KeyError, UnexpectedError):
             data = self.serialize_create()
             result = self.collection.create(data)
             self.created = now()
