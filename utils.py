@@ -10,9 +10,6 @@ def sync_customer(customer):
         bt_customer = Customer()
         bt_customer.id = customer
 
-    print customer.modified
-    print bt_customer.updated
-
     if not bt_customer.created or customer.modified > bt_customer.updated:
         bt_customer.first_name = customer.first_name
         bt_customer.last_name = customer.last_name

@@ -6,7 +6,8 @@ from django.db.models.fields.related import RelatedObject
 from .sync import BraintreeSyncedModel, BraintreeMirroredModel
 
 
-# Common attributes for cached fields
+# Common attributes sets for fields
+NULLABLE = {'blank': True, 'null': True}
 CACHED = {'editable': False, 'blank': True, 'null': True}
 
 
@@ -14,19 +15,24 @@ class Customer(BraintreeSyncedModel(braintree.Customer)):
     id = models.OneToOneField('customers.Customer',
         related_name='braintree', primary_key=True)
 
-    first_name = models.CharField(max_length=255, blank=True, null=True)
-    last_name = models.CharField(max_length=255, blank=True, null=True)
-    company = models.CharField(max_length=255, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
-    fax = models.CharField(max_length=255, blank=True, null=True)
-    phone = models.CharField(max_length=255, blank=True, null=True)
-    website = models.URLField(verify_exists=False, blank=True, null=True)
+    first_name = models.CharField(max_length=255, **NULLABLE)
+    last_name = models.CharField(max_length=255, **NULLABLE)
+    company = models.CharField(max_length=255, **NULLABLE)
+    email = models.EmailField(**NULLABLE)
+    fax = models.CharField(max_length=255, **NULLABLE)
+    phone = models.CharField(max_length=255, **NULLABLE)
+    website = models.URLField(**NULLABLE)
 
     def __unicode__(self):
         return self.full_name
 
     def braintree_key(self):
         return (str(self.id.pk),)
+
+    def push_related(self):
+        for address in self.addresses.all():
+            address.push()
+            address.save()
 
     @property
     def full_name(self):
@@ -37,15 +43,15 @@ class Address(BraintreeSyncedModel(braintree.Address)):
     code = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(Customer, related_name='addresses')
 
-    first_name = models.CharField(max_length=255, blank=True, null=True)
-    last_name = models.CharField(max_length=255, blank=True, null=True)
-    company = models.CharField(max_length=255, blank=True, null=True)
-    street_address = models.CharField(max_length=255, blank=True, null=True)
-    extended_address = models.CharField(max_length=255, blank=True, null=True)
-    locality = models.CharField(max_length=255, blank=True, null=True)
-    region = models.CharField(max_length=255, blank=True, null=True)
-    postal_code = models.CharField(max_length=255, blank=True, null=True)
-    country_code_alpha2 = models.CharField(max_length=255, blank=True, null=True)
+    first_name = models.CharField(max_length=255, **NULLABLE)
+    last_name = models.CharField(max_length=255, **NULLABLE)
+    company = models.CharField(max_length=255, **NULLABLE)
+    street_address = models.CharField(max_length=255, **NULLABLE)
+    extended_address = models.CharField(max_length=255, **NULLABLE)
+    locality = models.CharField(max_length=255, **NULLABLE)
+    region = models.CharField(max_length=255, **NULLABLE)
+    postal_code = models.CharField(max_length=255, **NULLABLE)
+    country_code_alpha2 = models.CharField(max_length=255, **NULLABLE)
 
     serialize_exclude = ('id',)
 

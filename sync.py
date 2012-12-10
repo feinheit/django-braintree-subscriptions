@@ -14,7 +14,6 @@ def BraintreeSyncedModel(braintree_collection):
     # TODO: Remove auto save on clean methods
 
     """ A django model for 2-way sync with the braintree vault """
-
     class BTSyncedModel(models.Model):
         # This is the vault data collection we sync with
         collection = braintree_collection
@@ -76,18 +75,18 @@ def BraintreeSyncedModel(braintree_collection):
                 self.on_pushed(result)
                 self.updated = now()
 
-        def clean(self):
-            """ performs a push on model validation """
-            self.push()
+        def push_related(self):
+            """ Implement this to automatically push related models """
+            pass
 
         def pull(self):
             """ Pull and sync data from vault into local instance """
             key = self.braintree_key()
             data = self.collection.find(*key)
-            self.update(data)
+            self.import_data(data)
 
-        def update(self, data):
-            """ Save the data from the vault into the instance """
+        def import_data(self, data):
+            """ Save the data from the vault onto the instance """
             for key, value in data.__dict__.iteritems():
                 if hasattr(self, key):
                     field = self._meta.get_field_by_name(key)[0]
@@ -98,21 +97,19 @@ def BraintreeSyncedModel(braintree_collection):
             self.updated = now()
             self.save()
 
-        def update_related(self, related_model, data):
+        def import_related(self, related_model, data):
             """ Deal with related objects when imported from pull """
             for object in data:
                 try:
                     other = related_model.objects.get(pk=object.id)
-                    other.update(object)
+                    other.import_data(object)
                 except ObjectDoesNotExist:
                     new = related_model.unserialize(object)
                     if new is not None:
                         new.save()
 
-    @receiver(pre_delete, weak=False)
-    def delete_in_vault(sender, instance, **kwargs):
-        """ Delete all instance in the vault """
-        if issubclass(sender, BTSyncedModel):
+        def delete_from_vault(self):
+            """ Remove object from vault """
             try:
                 braintree_collection.delete(*instance.braintree_key())
             except (NotFoundError, KeyError):

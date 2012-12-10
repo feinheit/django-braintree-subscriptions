@@ -1,6 +1,39 @@
 from django.contrib import admin
+from django.contrib import messages
+from django.core.exceptions import ValidationError
 
 from .models import Customer, Address, CreditCard, Plan, AddOn, Discount
+
+
+class SyncedBraintreeModelAdminMixin(object):
+    def save_model(self, request, obj, form, change):
+        try:
+            obj.push()
+            obj.save()
+        except ValidationError as e:
+            msg = u'Braintree push error: %s' % e.messages[0]
+            messages.error(request, msg)
+
+    def save_related(self, request, form, formsets, change):
+        form.save_m2m()
+        for formset in formsets:
+            self.save_formset(request, form, formset, change=change)
+
+        if form.instance:
+            try:
+                form.instance.push_related()
+            except ValidationError as e:
+                msg = u'Braintree push error: %s' % e.messages[0]
+                messages.error(request, msg)
+
+    def delete_model(self, request, obj):
+        obj.delete_from_vault()
+        obj.delete()
+
+    def bt_pull(self, request, queryset):
+        for instance in queryset:
+            instance.pull()
+    bt_pull.short_description = 'Pull data from braintree'
 
 
 class MirroredBrainteeModelAdminMixin(object):
@@ -33,8 +66,9 @@ class MirroredBrainteeModelAdminMixin(object):
             form.instance.pull_related()
 
 
-class AddressInlineAdmin(admin.StackedInline):
+class AddressInlineAdmin(SyncedBraintreeModelAdminMixin, admin.StackedInline):
     model = Address
+    readonly_fields = ('code',)
     extra = 0
 
 
@@ -43,7 +77,7 @@ class CreditCardInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
     extra = 0
 
 
-class CustomerAdmin(admin.ModelAdmin):
+class CustomerAdmin(SyncedBraintreeModelAdminMixin, admin.ModelAdmin):
     list_display = (
         'first_name',
         'last_name',
@@ -56,12 +90,7 @@ class CustomerAdmin(admin.ModelAdmin):
     inlines = (AddressInlineAdmin, CreditCardInline)
     raw_id_fields = ('id',)
     readonly_fields = ('created', 'updated')
-    actions = ('pull',)
-
-    def pull(self, request, queryset):
-        for instance in queryset:
-            instance.pull()
-    pull.short_description = 'Pull data from braintree'
+    actions = ('bt_pull',)
 
 
 class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
@@ -72,6 +101,7 @@ class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
 
     def has_delete_permission(self, request, obj):
         return False
+
 
 class DiscountInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
     model = Discount
