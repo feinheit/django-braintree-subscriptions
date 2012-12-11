@@ -94,17 +94,15 @@ class BTSyncedModel(models.Model):
     def import_data(self, data):
         """ Save the data from the vault onto the instance """
         for key, value in data.__dict__.iteritems():
-            if hasattr(self, key):
+            if hasattr(self, key) and key != 'id':
                 field = self._meta.get_field_by_name(key)[0]
-                if issubclass(field.__class__, RelatedObject):
-                    self.update_related(field.model, value)
-                elif not issubclass(field.__class__, RelatedField):
+                if not issubclass(field.__class__, RelatedObject):
                     setattr(self, key, value)
         self.updated = now()
         self.save()
 
+    """ Deprecated: implement this independentantly from import
     def import_related(self, related_model, data):
-        """ Deal with related objects when imported from pull """
         for object in data:
             try:
                 other = related_model.objects.get(pk=object.id)
@@ -113,6 +111,7 @@ class BTSyncedModel(models.Model):
                 new = related_model.unserialize(object)
                 if new is not None:
                     new.save()
+    """
 
     def delete_from_vault(self):
         """ Remove object from vault """

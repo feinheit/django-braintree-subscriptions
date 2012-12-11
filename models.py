@@ -4,6 +4,8 @@ from django.db import models
 from django.db.models.fields.related import RelatedObject
 from django.utils.translation import ugettext_lazy as _
 
+import jsonfield
+
 from .sync import BTSyncedModel, BTMirroredModel
 
 
@@ -300,8 +302,6 @@ class Subscription(BTSyncedModel):
     def cancel(self):
         """ Cancel this subscription instantly """
         result = self.collection.cancel(self.subscription_id)
-        self.status = Subscription.CANCELED
-        self.save()
         return result
 
     def braintree_key(self):
@@ -374,3 +374,14 @@ class Transaction(BTMirroredModel):
                         pass
                 else:
                     setattr(self, key, value)
+
+
+class WebhookLog(models.Model):
+    """ A log of received webhook notficiations. Purley for debugging """
+
+    received = models.DateTimeField(auto_now=True)
+    kind = models.CharField(max_length=255)
+    data = models.TextField(blank=True)
+
+    def __unicode__(self):
+        return self.kind

@@ -17,5 +17,8 @@ urlpatterns = patterns('keetab_cp.payments.views',
     url(r'^unsubscribe/(?P<subscription_id>\w+)/$', 'unsubscribe',
         name='payment_unsubscribe'),
 
+    url(r'^webhook/$', 'webhook',
+        name='payment_webhook'),
+
     url(r'^error/$', 'error', name='payment_error'),
 )

@@ -1,6 +1,9 @@
+from django import forms
+from django.db.models import TextField
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+
 
 import models
 
@@ -119,7 +122,16 @@ class DiscountInline(BTMirroredModelAdminMixin, admin.StackedInline):
 class PlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
     inlines = (AddOnInline, DiscountInline)
+    actions = ('import_all',)
 
+    def import_all(self, request, queryset):
+        import braintree
+        plans = braintree.Plan.all()
+        for plan in plans:
+            plan, created = models.Plan.objects_get_or_create(plan_id=plan.id)
+            plan.import_data(plan)
+            plan.import_related(plan)
+            plan.save()
 
 class TransactionInlineAdmin(BTMirroredModelAdminMixin, admin.TabularInline):
     model = models.Transaction
@@ -138,6 +150,15 @@ class SubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     readonly_fields = ('subscription_id', 'status')
     inlines = [TransactionInlineAdmin]
 
+
+class WebhookLogAdmin(admin.ModelAdmin):
+    readonly_fields = ('received',)
+    formfield_overrides = {
+        TextField: {'widget': forms.Textarea(attrs={'cols': 120, 'rows': 30})},
+    }
+
 admin.site.register(models.Customer, CustomerAdmin)
 admin.site.register(models.Plan, PlanAdmin)
 admin.site.register(models.Subscription, SubscriptionAdmin)
+
+admin.site.register(models.WebhookLog, WebhookLogAdmin)
