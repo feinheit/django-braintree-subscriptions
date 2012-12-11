@@ -5,12 +5,11 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.urlresolvers import reverse
-from django.utils.timezone import now
 
 from ..accounts import access
 
 from .utils import sync_customer
-from .models import CreditCard
+from .models import CreditCard, Plan, Subscription
 
 
 # TODO: Add decorator to directly receive customer in each view
@@ -24,11 +23,14 @@ def index(request):
     except ObjectDoesNotExist:
         return redirect('payment_add_credit_card')
 
+    subscriptions = Subscription.objects.for_customer(customer)
+    subscribed_plan_ids = [s.plan_id for s in subscriptions]
+    unsubscribed_plans = Plan.objects.exclude(plan_id__in=subscribed_plan_ids)
 
     #subscription = get_subscription(request.user.access)
-
     return render(request, 'payments/index.html', {
-        #'subscription': subscription
+        'plans': unsubscribed_plans,
+        'subscriptions': subscriptions
     })
 
 
@@ -100,53 +102,57 @@ def delete_credit_card(request, token):
     card.delete()
     return redirect('payment_index')
 
-"""
 
-@login_required
+def is_subscribed_to_plan(customer, plan_id):
+    try:
+        subscriptions = Subscription.objects.for_customer(customer)
+        subscriptions.get(plan_id=plan_id)
+        return True
+    except Subscription.DoesNotExist:
+        return False
+
+
 @access(access.MANAGER)
-def subscribe_to_plan(request, plan_id):
+def subscribe(request, plan_id):
     customer = request.user.access.customer
+    # Make sure plan exists
+    get_object_or_404(Plan, plan_id=plan_id)
 
-    # if not check_credit_card(request.user.access):
-    #     return redirect('payment_add_credit_card')
+    if is_subscribed_to_plan(customer, plan_id):
+        messages.info('You are already subscribed to this plan')
+        return redirect('payment_index')
 
-    result = braintree.Subscription.create({
-        "payment_method_token": customer.braintree_creditcard_token,
-        "plan_id": plan_id,
-        "trial_period": False
-    })
+    # TODO: this is stupid and should be removed
+    card = customer.braintree.credit_cards.latest('id')
+
+    subscription = Subscription()
+    subscription.payment_method_token = card.token
+    subscription.plan_id = plan_id
+
+    try:
+        subscription.push()
+        subscription.save()
+        messages.success(request,
+            'You have been successfully subscribed to plan %s' % plan_id)
+    except ValidationError as e:
+        messages.error(request,
+            'You could not be subscribed because: %s' % e.messages[0])
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def unsubscribe(request, subscription_id):
+    subscription = get_object_or_404(Subscription, subscription_id=subscription_id)
+
+    result = subscription.cancel()
 
     if result.is_success:
-        customer.braintree_subscription = result.subscription.id
-        customer.save()
         return redirect('payment_index')
     else:
         return render(request, 'payments/validation_error.html', {
             'result': result
         })
-
-
-@login_required
-@access(access.MANAGER)
-def unsubscribe(request):
-    subscription = get_subscription(request.user.access)
-
-    if not subscription:
-        return redirect('payment_index')
-
-    customer = request.user.access.customer
-
-    result = braintree.Subscription.cancel(customer.braintree_subscription)
-
-    if result.is_success:
-        customer.braintree_subscription = None
-        customer.save()
-        return redirect('payment_index')
-    else:
-        return render(request, 'payments/validation_error.html', {
-            'result': result
-        })
-"""
 
 
 @access(access.MANAGER)

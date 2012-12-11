@@ -1,11 +1,8 @@
-import braintree
 from braintree.exceptions.not_found_error import NotFoundError
 from braintree.exceptions.unexpected_error import UnexpectedError
 
 from django.db import models
 from django.db.models.fields.related import RelatedField, RelatedObject
-from django.db.models.signals import pre_delete
-from django.dispatch import receiver
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.forms.models import model_to_dict
 from django.utils.timezone import now
@@ -81,7 +78,11 @@ class BTSyncedModel(models.Model):
             self.updated = now()
 
     def push_related(self):
-        """ Implement this to automatically push related models """
+        """ Implement this to automatically push related BTSyncedModels """
+        pass
+
+    def pull_related(self):
+        """ Implement this to pull BTMirroredModels from braintree """
         pass
 
     def pull(self):
@@ -115,10 +116,11 @@ class BTSyncedModel(models.Model):
 
     def delete_from_vault(self):
         """ Remove object from vault """
-        try:
-            self.collection.delete(*self.braintree_key())
-        except (NotFoundError, KeyError):
-            pass
+        if hasattr(self.collection, 'delete'):
+            try:
+                self.collection.delete(*self.braintree_key())
+            except (NotFoundError, KeyError):
+                pass
 
 
 class BTMirroredModel(models.Model):

@@ -2,7 +2,7 @@ import braintree
 
 from django.db import models
 from django.db.models.fields.related import RelatedObject
-from django.forms.models import model_to_dict
+from django.utils.translation import ugettext_lazy as _
 
 from .sync import BTSyncedModel, BTMirroredModel
 
@@ -247,12 +247,38 @@ class Discount(models.Model):
         plan.discounts.exclude(pk__in=saved_ids).delete()
 
 
+class SubscriptionManager(models.Manager):
+
+    def running(self):
+        return self.filter(status__in=('Pending', 'Active', 'Past Due'))
+
+    def for_customer(self, customer):
+        customer = getattr(customer, 'braintree', customer)
+        tokens = [cc.token for cc in list(customer.credit_cards.all())]
+        return self.running().filter(payment_method_token__in=tokens)
+
+
 class Subscription(BTSyncedModel):
     collection = braintree.Subscription
+
+    PENDING = 'Pending'
+    ACTIVE = 'Active'
+    PAST_DUE = 'Past Due'
+    EXPIRED = 'Expired'
+    CANCELED = 'Canceled'
+
+    STATUS_CHOICES = (
+        (PENDING, _('Pending')),
+        (ACTIVE, _('Active')),
+        (PAST_DUE, _('Past Due')),
+        (EXPIRED, _('Expired')),
+        (CANCELED, _('Canceled'))
+    )
 
     subscription_id = models.CharField(max_length=255)
     payment_method_token = models.CharField(max_length=255)
     plan_id = models.CharField(max_length=255)
+    status = models.CharField(max_length=255, choices=STATUS_CHOICES)
 
     # Overriden details
     price = models.DecimalField(max_digits=5, decimal_places=2, **NULLABLE)
@@ -266,14 +292,32 @@ class Subscription(BTSyncedModel):
     billing_day_of_month = models.IntegerField(**NULLABLE)
     start_immediately = models.NullBooleanField()
 
+    objects = SubscriptionManager()
+
+    def __unicode__(self):
+        return self.subscription_id
+
+    def cancel(self):
+        """ Cancel this subscription instantly """
+        result = self.collection.cancel(self.subscription_id)
+        self.status = Subscription.CANCELED
+        self.save()
+        return result
+
     def braintree_key(self):
         return (self.subscription_id,)
 
+    def pull_related(self):
+        for transaction in self.transactions.all():
+            transaction.pull()
+            transaction.save()
+
     def on_pushed(self, result):
         self.subscription_id = result.subscription.id
+        self.status = result.subscription.status
 
     def serialize_create(self):
-        data = self.serialize(exclude=('id', 'subscription_id'))
+        data = self.serialize(exclude=('id', 'subscription_id', 'status'))
         data.update({
             'options': {
                 'do_not_inherit_add_ons_or_discounts': True
@@ -282,5 +326,51 @@ class Subscription(BTSyncedModel):
         return data
 
     def serialize_update(self):
-        return self.serialize(exclude=('id', 'subscription_id'))
+        return self.serialize(exclude=('id', 'subscription_id', 'status'))
 
+
+class Transaction(BTMirroredModel):
+    SALE = 'sale'
+    CREDIT = 'credit'
+
+    TYPE_CHOICES = (
+        (SALE, _('Sale')),
+        (CREDIT, _('Credit')),
+    )
+
+    collection = braintree.Transaction
+
+    transaction_id = models.CharField(max_length=255)
+    subscription = models.ForeignKey(Subscription, related_name='transactions',
+        **NULLABLE)
+
+    amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    currency_iso_code = models.CharField(max_length=255, **CACHED)
+    created_at = models.DateField(**CACHED)
+    updated_at = models.DateField(**CACHED)
+    status = models.CharField(max_length=255, **CACHED)
+    type = models.CharField(max_length=255, **CACHED)
+
+    def __unicode__(self):
+        return self.amount_dislay
+
+    @property
+    def amount_dislay(self):
+        return u'%s %s' % (self.amount, self.currency_iso_code)
+
+    def braintree_key(self):
+        return (self.transaction_id,)
+
+    def import_data(self, data):
+        for key, value in data.__dict__.iteritems():
+            if hasattr(self, key) and key != 'id':
+                if key == 'subscription':
+                    continue
+                elif key == 'subscription_id':
+                    try:
+                        sub = Subscription.objects.get(subscription_id=value)
+                        self.subscription = sub
+                    except Subscription.DoesNotExist:
+                        pass
+                else:
+                    setattr(self, key, value)

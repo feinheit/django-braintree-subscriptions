@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 import models
 
 
-class SyncedBraintreeModelAdminMixin(object):
+class BTSyncedModelAdminMixin(object):
     def save_model(self, request, obj, form, change):
         try:
             obj.push()
@@ -22,6 +22,7 @@ class SyncedBraintreeModelAdminMixin(object):
         if form.instance:
             try:
                 form.instance.push_related()
+                form.instance.pull_related()
             except ValidationError as e:
                 msg = u'Braintree push error: %s' % e.messages[0]
                 messages.error(request, msg)
@@ -36,15 +37,17 @@ class SyncedBraintreeModelAdminMixin(object):
     bt_pull.short_description = 'Pull data from braintree'
 
 
-class MirroredBrainteeModelAdminMixin(object):
+class BTMirroredModelAdminMixin(object):
     def get_readonly_fields(self, request, obj=None):
         """ show all cached fields as readonly in admin """
         if hasattr(self, '_readonly_fields'):
             return self._readonly_fields
         self._readonly_fields = []
 
+        excluded = getattr(self, 'readonly_excluded_fields', [])
+
         for field in self.model._meta.fields:
-            if field.null and not field.editable:
+            if field.null and not field.editable and not field.name in excluded:
                 self._readonly_fields.append(field.name)
 
         return self._readonly_fields
@@ -66,18 +69,18 @@ class MirroredBrainteeModelAdminMixin(object):
             form.instance.pull_related()
 
 
-class AddressInlineAdmin(SyncedBraintreeModelAdminMixin, admin.StackedInline):
+class AddressInlineAdmin(BTSyncedModelAdminMixin, admin.StackedInline):
     model = models.Address
     readonly_fields = ('code',)
     extra = 0
 
 
-class CreditCardInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
+class CreditCardInline(BTMirroredModelAdminMixin, admin.StackedInline):
     model = models.CreditCard
     extra = 0
 
 
-class CustomerAdmin(SyncedBraintreeModelAdminMixin, admin.ModelAdmin):
+class CustomerAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     list_display = (
         'first_name',
         'last_name',
@@ -93,34 +96,47 @@ class CustomerAdmin(SyncedBraintreeModelAdminMixin, admin.ModelAdmin):
     actions = ('bt_pull',)
 
 
-class AddOnInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
+class AddOnInline(BTMirroredModelAdminMixin, admin.StackedInline):
     model = models.AddOn
 
     def has_add_permission(self, request):
         return False
 
-    def has_delete_permission(self, request, obj):
+    def has_delete_permission(self, request, obj=None):
         return False
 
 
-class DiscountInline(MirroredBrainteeModelAdminMixin, admin.StackedInline):
+class DiscountInline(BTMirroredModelAdminMixin, admin.StackedInline):
     model = models.Discount
 
     def has_add_permission(self, request):
         return False
 
-    def has_delete_permission(self, request, obj):
+    def has_delete_permission(self, request, obj=None):
         return False
 
 
-class PlanAdmin(MirroredBrainteeModelAdminMixin, admin.ModelAdmin):
+class PlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
     inlines = (AddOnInline, DiscountInline)
 
 
-class SubscriptionAdmin(SyncedBraintreeModelAdminMixin, admin.ModelAdmin):
-    list_filter = ('plan_id',)
-    readonly_fields = ('subscription_id',)
+class TransactionInlineAdmin(BTMirroredModelAdminMixin, admin.TabularInline):
+    model = models.Transaction
+    readonly_excluded_fields = ('updated_at',)
+    extra = 0
+
+
+class SubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
+    list_display = (
+        'subscription_id',
+        'status',
+        'payment_method_token',
+        'plan_id'
+    )
+    list_filter = ('plan_id', 'status')
+    readonly_fields = ('subscription_id', 'status')
+    inlines = [TransactionInlineAdmin]
 
 admin.site.register(models.Customer, CustomerAdmin)
 admin.site.register(models.Plan, PlanAdmin)
