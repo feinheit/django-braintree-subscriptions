@@ -302,6 +302,9 @@ class Subscription(BTSyncedModel):
     def cancel(self):
         """ Cancel this subscription instantly """
         result = self.collection.cancel(self.subscription_id)
+        if result.is_success:
+            self.status = Subscription.CANCELED
+            self.save()
         return result
 
     def braintree_key(self):
