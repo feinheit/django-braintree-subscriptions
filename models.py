@@ -4,8 +4,6 @@ from django.db import models
 from django.db.models.fields.related import RelatedObject
 from django.utils.translation import ugettext_lazy as _
 
-import jsonfield
-
 from .sync import BTSyncedModel, BTMirroredModel
 
 
