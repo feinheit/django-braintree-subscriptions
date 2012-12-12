@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.translation import ugettext_lazy as _
 
 from ..accounts import access
 
@@ -119,7 +120,7 @@ def subscribe(request, plan_id):
     get_object_or_404(Plan, plan_id=plan_id)
 
     if is_subscribed_to_plan(customer, plan_id):
-        messages.info(request, 'You are already subscribed to this plan')
+        messages.info(request, _('You are already subscribed to this plan'))
         return redirect('payment_index')
 
     # TODO: this is stupid and should be removed
@@ -133,10 +134,16 @@ def subscribe(request, plan_id):
         subscription.push()
         subscription.save()
         messages.success(request,
-            'You have been successfully subscribed to plan %s' % plan_id)
+            _('You have been successfully subscribed to plan %(plan)s') % {
+                'plan': plan_id
+            }
+        )
     except ValidationError as e:
         messages.error(request,
-            'You could not be subscribed because: %s' % e.messages[0])
+            _('You could not be subscribed because: %(message)s') % {
+                'message': e.messages[0]
+            }
+        )
 
     return redirect('payment_index')
 
@@ -148,6 +155,11 @@ def unsubscribe(request, subscription_id):
     result = subscription.cancel()
 
     if result.is_success:
+        messages.warning(request,
+            _('Your subscription to %(plan)s was canceled') % {
+                'plan': subscription.plan_id
+            }
+        )
         return redirect('payment_index')
     else:
         return render(request, 'payments/validation_error.html', {
