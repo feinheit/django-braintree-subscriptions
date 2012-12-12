@@ -1,5 +1,6 @@
 from braintree import WebhookNotification
 import braintree
+import traceback
 from pprint import pformat
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -98,6 +99,7 @@ def confirm_credit_card(request):
         })
 
 
+
 @access(access.MANAGER)
 def delete_credit_card(request, token):
     card = get_object_or_404(CreditCard, token=token)
@@ -108,7 +110,6 @@ def delete_credit_card(request, token):
 @access(access.MANAGER)
 def subscribe(request, plan_id):
     customer = request.user.access.customer
-    # Make sure plan exists
     plan = get_object_or_404(Plan, plan_id=plan_id)
     running_subscriptions = customer.braintree.subscriptions.running()
 
@@ -126,7 +127,13 @@ def subscribe(request, plan_id):
 
     try:
         subscription.push()
-        subscription.save()
+        # Webhooks COULD have already saved this subscription
+        try:
+            subscription_id = subscription.subscription_id
+            Subscription.objects.get(subscription_id=subscription_id)
+        except Subscription.DoesNotExist:
+            # Save otherwise
+            subscription.save()
         messages.success(request,
             _('You have been successfully subscribed to plan %(plan)s') % {
                 'plan': plan_id
@@ -177,46 +184,56 @@ def bt_to_dict(resource):
 
 @csrf_exempt
 def webhook(request):
-
     if 'bt_challenge' in request.GET:
         challenge = request.GET['bt_challenge']
         return HttpResponse(WebhookNotification.verify(challenge))
-    if 'bt_signature' in request.POST and 'bt_payload' in request.POST:
+    elif 'bt_signature' in request.POST and 'bt_payload' in request.POST:
         bt_signature = str(request.POST['bt_signature'])
         bt_payload = str(request.POST['bt_payload'])
-
         notification = WebhookNotification.parse(bt_signature, bt_payload)
-
-        log = WebhookLog(kind=notification.kind)
-
-        if hasattr(notification, 'subscription'):
-            subscription = notification.subscription
-
-            log.data = pformat(bt_to_dict(subscription), indent=2)
-
-            # Update subscription
-            dbsub, created = Subscription.objects.get_or_create(
-                subscription_id=subscription.id
-            )
-
-            dbsub.import_data(subscription)
-            dbsub.save()
-
-            if notification.kind == "subscription_charged_successfully":
-                # Import transactions
-                for transaction in subscription.transactions:
-                    dbtrans, created = Transaction.objects.get_or_create(
-                        transaction_id=transaction.id
-                    )
-
-                    dbtrans.import_data(transaction)
-                    dbtrans.save()
-
-        log.save()
-
-        return HttpResponse('Ok, thanks')
+        return handle_webhook_notficiation(notification)
     else:
         return HttpResponse("I don't understand you")
+
+
+def handle_webhook_notficiation(notification):
+    log = WebhookLog(kind=notification.kind)
+    try:
+        log.data = pformat(bt_to_dict(notification.subscription), indent=2)
+
+        token = notification.subscription.payment_method_token
+        card = CreditCard.objects.get(token=token)
+
+        plan_id = notification.subscription.plan_id
+        plan = Plan.objects.get(plan_id=plan_id)
+
+        # Update subscription
+        subscription, created = Subscription.objects.get_or_create(
+            subscription_id=notification.subscription.id,
+            customer=card.customer,
+            plan=plan
+        )
+
+        subscription.import_data(notification.subscription)
+        subscription.save()
+
+        # Import transactions
+        if notification.kind == "subscription_charged_successfully":
+            for transaction in notification.subscription.transactions:
+                trans, created = Transaction.objects.get_or_create(
+                    transaction_id=transaction.id,
+                    subscription=subscription,
+                )
+
+                trans.import_data(transaction)
+                trans.save()
+    except:
+        log.exception = traceback.format_exc()
+        raise
+    finally:
+        log.save()
+
+    return HttpResponse('Ok, thanks')
 
 
 @access(access.MANAGER)

@@ -270,7 +270,7 @@ class SubscriptionManager(models.Manager):
 
 class Subscription(BTSyncedModel):
     collection = braintree.Subscription
-    pull_excluded_fields = ('id', 'plan_id')
+    pull_excluded_fields = ('id', 'plan_id', 'payment_method_token')
 
     PENDING = 'Pending'
     ACTIVE = 'Active'
@@ -365,10 +365,10 @@ class Transaction(BTMirroredModel):
     )
 
     collection = braintree.Transaction
+    skip_import_fields = ('id', 'subscription', 'subscription_id')
 
     transaction_id = models.CharField(max_length=255)
-    subscription = models.ForeignKey(Subscription, related_name='transactions',
-        **NULLABLE)
+    subscription = models.ForeignKey(Subscription, related_name='transactions')
 
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     currency_iso_code = models.CharField(max_length=255, **CACHED)
@@ -389,17 +389,8 @@ class Transaction(BTMirroredModel):
 
     def import_data(self, data):
         for key, value in data.__dict__.iteritems():
-            if hasattr(self, key) and key != 'id':
-                if key == 'subscription':
-                    continue
-                elif key == 'subscription_id':
-                    try:
-                        sub = Subscription.objects.get(subscription_id=value)
-                        self.subscription = sub
-                    except Subscription.DoesNotExist:
-                        pass
-                else:
-                    setattr(self, key, value)
+            if hasattr(self, key) and key not in self.skip_import_fields:
+                setattr(self, key, value)
 
 
 class WebhookLog(models.Model):
@@ -408,6 +399,7 @@ class WebhookLog(models.Model):
     received = models.DateTimeField(auto_now=True)
     kind = models.CharField(max_length=255)
     data = models.TextField(blank=True)
+    exception = models.TextField(blank=True)
 
     def __unicode__(self):
         return self.kind
