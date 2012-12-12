@@ -26,6 +26,9 @@ class Customer(BTSyncedModel):
     phone = models.CharField(max_length=255, **NULLABLE)
     website = models.URLField(**NULLABLE)
 
+    plans = models.ManyToManyField('Plan', through='Subscription',
+        related_name='customers')
+
     def __unicode__(self):
         return self.full_name
 
@@ -88,12 +91,22 @@ class Address(BTSyncedModel):
             self.code = result.address.id
 
 
+class CreditCardManager(models.Manager):
+
+    def has_default(self):
+        return self.filter(default=True).count() == 1
+
+    def get_default(self):
+        return self.get(default=True)
+
+
 class CreditCard(BTMirroredModel):
     collection = braintree.CreditCard
 
     token = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(Customer, related_name='credit_cards')
 
+    # There should be only one per customer!
     default = models.NullBooleanField(**CACHED)
 
     bin = models.IntegerField(**CACHED)
@@ -107,6 +120,8 @@ class CreditCard(BTMirroredModel):
 
     country_of_issuance = models.CharField(max_length=255, **CACHED)
     issuing_bank = models.CharField(max_length=255, **CACHED)
+
+    objects = CreditCardManager()
 
     # There are more boolean fields in braintree available, yet i don't think
     # We need them for now
@@ -252,14 +267,10 @@ class SubscriptionManager(models.Manager):
     def running(self):
         return self.filter(status__in=('Pending', 'Active', 'Past Due'))
 
-    def for_customer(self, customer):
-        customer = getattr(customer, 'braintree', customer)
-        tokens = [cc.token for cc in list(customer.credit_cards.all())]
-        return self.running().filter(payment_method_token__in=tokens)
-
 
 class Subscription(BTSyncedModel):
     collection = braintree.Subscription
+    pull_excluded_fields = ('id', 'plan_id')
 
     PENDING = 'Pending'
     ACTIVE = 'Active'
@@ -276,8 +287,10 @@ class Subscription(BTSyncedModel):
     )
 
     subscription_id = models.CharField(max_length=255)
-    payment_method_token = models.CharField(max_length=255)
-    plan_id = models.CharField(max_length=255)
+
+    customer = models.ForeignKey(Customer, related_name='subscriptions')
+    plan = models.ForeignKey(Plan, related_name='subscriptions')
+
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
 
     # Overriden details
@@ -293,6 +306,8 @@ class Subscription(BTSyncedModel):
     start_immediately = models.NullBooleanField()
 
     objects = SubscriptionManager()
+
+    serialize_excluded = ('id', 'customer', 'plan', 'subscription_id', 'status')
 
     def __unicode__(self):
         return self.subscription_id
@@ -317,8 +332,18 @@ class Subscription(BTSyncedModel):
         self.subscription_id = result.subscription.id
         self.status = result.subscription.status
 
+    def serialize_base(self):
+        # Intentionally raise DoesNotExist here if 0 or >1 default cards
+        card = self.customer.credit_cards.get_default()
+        data = self.serialize(exclude=self.serialize_excluded)
+        data.update({
+            'plan_id': self.plan.plan_id,
+            'payment_method_token': card.token,
+        })
+        return data
+
     def serialize_create(self):
-        data = self.serialize(exclude=('id', 'subscription_id', 'status'))
+        data = self.serialize_base()
         data.update({
             'options': {
                 'do_not_inherit_add_ons_or_discounts': True
@@ -327,7 +352,7 @@ class Subscription(BTSyncedModel):
         return data
 
     def serialize_update(self):
-        return self.serialize(exclude=('id', 'subscription_id', 'status'))
+        return self.serialize_base()
 
 
 class Transaction(BTMirroredModel):

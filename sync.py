@@ -2,8 +2,8 @@ from braintree.exceptions.not_found_error import NotFoundError
 from braintree.exceptions.unexpected_error import UnexpectedError
 
 from django.db import models
-from django.db.models.fields.related import RelatedField, RelatedObject
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.db.models.fields.related import RelatedObject
+from django.core.exceptions import ValidationError
 from django.forms.models import model_to_dict
 from django.utils.timezone import now
 
@@ -22,6 +22,9 @@ class BTSyncedModel(models.Model):
 
     # Timestamp are never synced
     always_exclude = ('created', 'updated')
+
+    # These fields are never imported on pull
+    pull_excluded_fields = ('id',)
 
     class Meta:
         get_latest_by = "created"
@@ -94,7 +97,7 @@ class BTSyncedModel(models.Model):
     def import_data(self, data):
         """ Save the data from the vault onto the instance """
         for key, value in data.__dict__.iteritems():
-            if hasattr(self, key) and key != 'id':
+            if hasattr(self, key) and key not in self.pull_excluded_fields:
                 field = self._meta.get_field_by_name(key)[0]
                 if not issubclass(field.__class__, RelatedObject):
                     setattr(self, key, value)
@@ -144,6 +147,14 @@ class BTMirroredModel(models.Model):
         """ A represantion of how this instance is indexed in the vault """
         raise NotImplementedError('braintree_key() not implemented')
 
+    def import_data(self, data):
+        """ How the data from the vault into the instance """
+        raise NotImplementedError('import_data(data) not implemented')
+
+    def import_related(self, data):
+        """ import related objects from vault """
+        raise NotImplementedError('import_releated(data) not implemented')
+
     def reset_fields(self):
         """ empty all cached fields from the model """
         for field in self._meta.fields:
@@ -167,14 +178,6 @@ class BTMirroredModel(models.Model):
 
         return self.data
 
-    def import_data(self, data):
-        """ How the data from the vault into the instance """
-        raise NotImplementedError('import_data(data) not implemented')
-
-    def import_related(self, data):
-        """ import related objects from vault """
-        raise NotImplementedError('import_releated(data) not implemented')
-
     def pull(self):
         self.get_data_from_vault()
         if self.data:
@@ -188,7 +191,8 @@ class BTMirroredModel(models.Model):
 
         for field_name in self._meta.get_all_field_names():
             field = self._meta.get_field_by_name(field_name)[0]
-            if issubclass(field.__class__, RelatedObject):
+            if issubclass(field.__class__, RelatedObject) and \
+               hasattr(field.model, 'import_related'):
                 related_objects = getattr(self.data, field_name, ())
                 field.model.import_related(self, related_objects)
 

@@ -5,7 +5,7 @@ from .models import Customer, Address
 def sync_customer(customer):
     """ Make sure the customer exists in the vault and is up to date"""
     try:
-        bt_customer = Customer.objects.get(pk=customer.pk)
+        bt_customer = customer.braintree
     except Customer.DoesNotExist:
         bt_customer = Customer()
         bt_customer.id = customer

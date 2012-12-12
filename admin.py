@@ -143,10 +143,10 @@ class SubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     list_display = (
         'subscription_id',
         'status',
-        'payment_method_token',
-        'plan_id'
+        'customer',
+        'plan'
     )
-    list_filter = ('plan_id', 'status')
+    list_filter = ('plan', 'status')
     readonly_fields = ('subscription_id', 'status')
     inlines = [TransactionInlineAdmin]
 

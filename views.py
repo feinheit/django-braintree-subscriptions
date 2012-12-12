@@ -1,11 +1,10 @@
 from braintree import WebhookNotification
 import braintree
-import uuid
 from pprint import pformat
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -22,19 +21,17 @@ from .models import CreditCard, Plan, Subscription, Transaction, WebhookLog
 def index(request):
     customer = request.access.customer
 
-    try:
-        btcustomer = customer.braintree
-        btcustomer.credit_cards.latest('id')
-    except ObjectDoesNotExist:
+    sync_customer(customer)
+
+    if not customer.braintree.credit_cards.has_default():
         return redirect('payment_add_credit_card')
 
-    subscriptions = Subscription.objects.for_customer(customer)
-    subscribed_plan_ids = [s.plan_id for s in subscriptions]
-    unsubscribed_plans = Plan.objects.exclude(plan_id__in=subscribed_plan_ids)
+    subscriptions = customer.braintree.subscriptions.running()
+    subscribed_plan_ids = subscriptions.values_list('plan__id')
+    unsubscribed_plans = Plan.objects.exclude(id__in=subscribed_plan_ids)
 
-    #subscription = get_subscription(request.user.access)
     return render(request, 'payments/index.html', {
-        'plans': unsubscribed_plans,
+        'unsubscribed_plans': unsubscribed_plans,
         'subscriptions': subscriptions
     })
 
@@ -49,13 +46,13 @@ def add_credit_card(request):
         messages.error(request, e)
         return redirect('payment_error')
 
-    cc_token = str(uuid.uuid1())
+    #cc_token = str(uuid.uuid1())
 
     tr_data = braintree.CreditCard.tr_data_for_create(
         {
             "credit_card": {
                 "customer_id": str(customer.id),
-                "token": cc_token,
+                #"token": cc_token,
                 "options": {
                     "make_default": True,
                     "verify_card": True,
@@ -108,27 +105,24 @@ def delete_credit_card(request, token):
     return redirect('payment_index')
 
 
-def is_subscribed_to_plan(customer, plan_id):
-    subscriptions = Subscription.objects.for_customer(customer)
-    return subscriptions.filter(plan_id=plan_id).count()
-
-
 @access(access.MANAGER)
 def subscribe(request, plan_id):
     customer = request.user.access.customer
     # Make sure plan exists
-    get_object_or_404(Plan, plan_id=plan_id)
+    plan = get_object_or_404(Plan, plan_id=plan_id)
+    running_subscriptions = customer.braintree.subscriptions.running()
 
-    if is_subscribed_to_plan(customer, plan_id):
+    if running_subscriptions.filter(plan__plan_id=plan_id).count():
         messages.info(request, _('You are already subscribed to this plan'))
         return redirect('payment_index')
 
-    # TODO: this is stupid and should be removed
-    card = customer.braintree.credit_cards.latest('id')
+    if not customer.braintree.credit_cards.has_default():
+        messages.error(request, _('No default Credit Card defined'))
+        return redirect('payment_index')
 
     subscription = Subscription()
-    subscription.payment_method_token = card.token
-    subscription.plan_id = plan_id
+    subscription.customer = customer.braintree
+    subscription.plan = plan
 
     try:
         subscription.push()
@@ -162,6 +156,12 @@ def unsubscribe(request, subscription_id):
         )
         return redirect('payment_index')
     else:
+        error_codes = (error.code for error in result.errors.deep_errors)
+        if '81905' in error_codes:  # Subscription already canceled
+            subscription.status = Subscription.CANCELED
+            subscription.save()
+            return redirect('payment_index')
+
         return render(request, 'payments/validation_error.html', {
             'result': result
         })
