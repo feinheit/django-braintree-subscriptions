@@ -119,7 +119,7 @@ def subscribe(request, plan_id):
     get_object_or_404(Plan, plan_id=plan_id)
 
     if is_subscribed_to_plan(customer, plan_id):
-        messages.info('You are already subscribed to this plan')
+        messages.info(request, 'You are already subscribed to this plan')
         return redirect('payment_index')
 
     # TODO: this is stupid and should be removed
