@@ -108,12 +108,8 @@ def delete_credit_card(request, token):
 
 
 def is_subscribed_to_plan(customer, plan_id):
-    try:
-        subscriptions = Subscription.objects.for_customer(customer)
-        subscriptions.get(plan_id=plan_id)
-        return True
-    except Subscription.DoesNotExist:
-        return False
+    subscriptions = Subscription.objects.for_customer(customer)
+    return subscriptions.filter(plan_id=plan_id).count()
 
 
 @access(access.MANAGER)
