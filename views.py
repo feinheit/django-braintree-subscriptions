@@ -26,14 +26,14 @@ def index(request):
 
     sync_customer(customer)
 
-    if not customer.braintree.credit_cards.has_default():
-        return redirect('payment_add_credit_card')
+    card = customer.braintree.credit_cards.get_default()
 
     subscriptions = customer.braintree.subscriptions.running()
     subscribed_plan_ids = subscriptions.values_list('plan__id')
     unsubscribed_plans = BTPlan.objects.exclude(id__in=subscribed_plan_ids)
 
     return render(request, 'payments/index.html', {
+        'card': card,
         'unsubscribed_plans': unsubscribed_plans,
         'subscriptions': subscriptions
     })

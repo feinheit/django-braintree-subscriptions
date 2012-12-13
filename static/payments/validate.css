@@ -1,8 +1,8 @@
 #card_number {
-    width: 180px;
+    width: 300px;
     background-image: url('cards/generic.png');
     background-repeat: no-repeat;
-    background-position: 158px 4px;
+    background-position: 262px 6px;
 }
 
 #card_number.visa {
@@ -22,21 +22,23 @@
 }
 
 #expiration_month {
-    width: 30px;
+    width: 80px;
+    text-align: center;
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
     margin-right: -2px;
 }
 
 #expiration_year {
-    width: 30px;
+    width: 80px;
+    text-align: center;
     border-top-left-radius: 0px;
     border-bottom-left-radius: 0px;
     margin-left: -3px;
 }
 
 #cardholder_name {
-    width: 180px;
+    width: 300px;
 }
 
 #cvv {

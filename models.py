@@ -106,7 +106,10 @@ class BTCreditCardManager(models.Manager):
         return self.filter(default=True).count() == 1
 
     def get_default(self):
-        return self.get(default=True)
+        try:
+            return self.get(default=True)
+        except self.model.DoesNotExist:
+            return None
 
 
 class BTCreditCard(BTMirroredModel):
