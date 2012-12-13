@@ -14,7 +14,9 @@ from django.utils.translation import ugettext_lazy as _
 from ..accounts import access
 
 from .utils import sync_customer
-from .models import CreditCard, Plan, Subscription, Transaction, WebhookLog
+
+from models import BTCreditCard, BTPlan, BTSubscription, BTTransaction
+from models import BTWebhookLog
 
 
 # TODO: Add decorator to directly receive customer in each view
@@ -29,7 +31,7 @@ def index(request):
 
     subscriptions = customer.braintree.subscriptions.running()
     subscribed_plan_ids = subscriptions.values_list('plan__id')
-    unsubscribed_plans = Plan.objects.exclude(id__in=subscribed_plan_ids)
+    unsubscribed_plans = BTPlan.objects.exclude(id__in=subscribed_plan_ids)
 
     return render(request, 'payments/index.html', {
         'unsubscribed_plans': unsubscribed_plans,
@@ -86,7 +88,7 @@ def confirm_credit_card(request):
     result = braintree.TransparentRedirect.confirm(query_string)
 
     if result.is_success:
-        creditcard = CreditCard(
+        creditcard = BTCreditCard(
             token=result.credit_card.token,
             customer=customer.braintree
         )
@@ -99,10 +101,9 @@ def confirm_credit_card(request):
         })
 
 
-
 @access(access.MANAGER)
 def delete_credit_card(request, token):
-    card = get_object_or_404(CreditCard, token=token)
+    card = get_object_or_404(BTCreditCard, token=token)
     card.delete()
     return redirect('payment_index')
 
@@ -110,7 +111,7 @@ def delete_credit_card(request, token):
 @access(access.MANAGER)
 def subscribe(request, plan_id):
     customer = request.user.access.customer
-    plan = get_object_or_404(Plan, plan_id=plan_id)
+    plan = get_object_or_404(BTPlan, plan_id=plan_id)
     running_subscriptions = customer.braintree.subscriptions.running()
 
     if running_subscriptions.filter(plan__plan_id=plan_id).count():
@@ -121,7 +122,7 @@ def subscribe(request, plan_id):
         messages.error(request, _('No default Credit Card defined'))
         return redirect('payment_index')
 
-    subscription = Subscription()
+    subscription = BTSubscription()
     subscription.customer = customer.braintree
     subscription.plan = plan
 
@@ -130,8 +131,8 @@ def subscribe(request, plan_id):
         # Webhooks COULD have already saved this subscription
         try:
             subscription_id = subscription.subscription_id
-            Subscription.objects.get(subscription_id=subscription_id)
-        except Subscription.DoesNotExist:
+            BTSubscription.objects.get(subscription_id=subscription_id)
+        except BTSubscription.DoesNotExist:
             # Save otherwise
             subscription.save()
         messages.success(request,
@@ -151,7 +152,8 @@ def subscribe(request, plan_id):
 
 @access(access.MANAGER)
 def unsubscribe(request, subscription_id):
-    subscription = get_object_or_404(Subscription, subscription_id=subscription_id)
+    subscription = get_object_or_404(BTSubscription,
+        subscription_id=subscription_id)
 
     result = subscription.cancel()
 
@@ -165,7 +167,7 @@ def unsubscribe(request, subscription_id):
     else:
         error_codes = (error.code for error in result.errors.deep_errors)
         if '81905' in error_codes:  # Subscription already canceled
-            subscription.status = Subscription.CANCELED
+            subscription.status = BTSubscription.CANCELED
             subscription.save()
             return redirect('payment_index')
 
@@ -197,18 +199,18 @@ def webhook(request):
 
 
 def handle_webhook_notficiation(notification):
-    log = WebhookLog(kind=notification.kind)
+    log = BTWebhookLog(kind=notification.kind)
     try:
         log.data = pformat(bt_to_dict(notification.subscription), indent=2)
 
         token = notification.subscription.payment_method_token
-        card = CreditCard.objects.get(token=token)
+        card = BTCreditCard.objects.get(token=token)
 
         plan_id = notification.subscription.plan_id
-        plan = Plan.objects.get(plan_id=plan_id)
+        plan = BTPlan.objects.get(plan_id=plan_id)
 
         # Update subscription
-        subscription, created = Subscription.objects.get_or_create(
+        subscription, created = BTSubscription.objects.get_or_create(
             subscription_id=notification.subscription.id,
             customer=card.customer,
             plan=plan
@@ -220,7 +222,7 @@ def handle_webhook_notficiation(notification):
         # Import transactions
         if notification.kind == "subscription_charged_successfully":
             for transaction in notification.subscription.transactions:
-                trans, created = Transaction.objects.get_or_create(
+                trans, created = BTTransaction.objects.get_or_create(
                     transaction_id=transaction.id,
                     subscription=subscription,
                 )

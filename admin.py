@@ -72,18 +72,18 @@ class BTMirroredModelAdminMixin(object):
             form.instance.pull_related()
 
 
-class AddressInlineAdmin(BTSyncedModelAdminMixin, admin.StackedInline):
-    model = models.Address
+class BTAddressInlineAdmin(BTSyncedModelAdminMixin, admin.StackedInline):
+    model = models.BTAddress
     readonly_fields = ('code',)
     extra = 0
 
 
-class CreditCardInline(BTMirroredModelAdminMixin, admin.StackedInline):
-    model = models.CreditCard
+class BTCreditCardInline(BTMirroredModelAdminMixin, admin.StackedInline):
+    model = models.BTCreditCard
     extra = 0
 
 
-class CustomerAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
+class BTCustomerAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     list_display = (
         'first_name',
         'last_name',
@@ -93,14 +93,14 @@ class CustomerAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
         'phone',
         'website'
     )
-    inlines = (AddressInlineAdmin, CreditCardInline)
+    inlines = (BTAddressInlineAdmin, BTCreditCardInline)
     raw_id_fields = ('id',)
     readonly_fields = ('created', 'updated')
     actions = ('bt_pull',)
 
 
-class AddOnInline(BTMirroredModelAdminMixin, admin.StackedInline):
-    model = models.AddOn
+class BTAddOnInline(BTMirroredModelAdminMixin, admin.StackedInline):
+    model = models.BTAddOn
 
     def has_add_permission(self, request):
         return False
@@ -109,8 +109,8 @@ class AddOnInline(BTMirroredModelAdminMixin, admin.StackedInline):
         return False
 
 
-class DiscountInline(BTMirroredModelAdminMixin, admin.StackedInline):
-    model = models.Discount
+class BTDiscountInline(BTMirroredModelAdminMixin, admin.StackedInline):
+    model = models.BTDiscount
 
     def has_add_permission(self, request):
         return False
@@ -119,9 +119,9 @@ class DiscountInline(BTMirroredModelAdminMixin, admin.StackedInline):
         return False
 
 
-class PlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
+class BTPlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
-    inlines = (AddOnInline, DiscountInline)
+    inlines = (BTAddOnInline, BTDiscountInline)
     actions = ('import_all',)
 
     def import_all(self, request, queryset):
@@ -133,13 +133,14 @@ class PlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
             plan.import_related(plan)
             plan.save()
 
-class TransactionInlineAdmin(BTMirroredModelAdminMixin, admin.TabularInline):
-    model = models.Transaction
+
+class BTTransactionInlineAdmin(BTMirroredModelAdminMixin, admin.TabularInline):
+    model = models.BTTransaction
     readonly_excluded_fields = ('updated_at',)
     extra = 0
 
 
-class SubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
+class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     list_display = (
         'subscription_id',
         'status',
@@ -148,17 +149,17 @@ class SubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     )
     list_filter = ('plan', 'status')
     readonly_fields = ('subscription_id', 'status')
-    inlines = [TransactionInlineAdmin]
+    inlines = [BTTransactionInlineAdmin]
 
 
-class WebhookLogAdmin(admin.ModelAdmin):
+class BTWebhookLogAdmin(admin.ModelAdmin):
     readonly_fields = ('received',)
     formfield_overrides = {
         TextField: {'widget': forms.Textarea(attrs={'cols': 120, 'rows': 30})},
     }
 
-admin.site.register(models.Customer, CustomerAdmin)
-admin.site.register(models.Plan, PlanAdmin)
-admin.site.register(models.Subscription, SubscriptionAdmin)
+admin.site.register(models.BTCustomer, BTCustomerAdmin)
+admin.site.register(models.BTPlan, BTPlanAdmin)
+admin.site.register(models.BTSubscription, BTSubscriptionAdmin)
 
-admin.site.register(models.WebhookLog, WebhookLogAdmin)
+admin.site.register(models.BTWebhookLog, BTWebhookLogAdmin)

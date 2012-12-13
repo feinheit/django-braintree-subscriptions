@@ -1,13 +1,13 @@
 
-from .models import Customer, Address
+from .models import BTCustomer, BTAddress
 
 
 def sync_customer(customer):
     """ Make sure the customer exists in the vault and is up to date"""
     try:
         bt_customer = customer.braintree
-    except Customer.DoesNotExist:
-        bt_customer = Customer()
+    except BTCustomer.DoesNotExist:
+        bt_customer = BTCustomer()
         bt_customer.id = customer
 
     if not bt_customer.created or customer.modified > bt_customer.updated:
@@ -20,8 +20,8 @@ def sync_customer(customer):
 
     try:
         bt_address = bt_customer.addresses.latest()
-    except Address.DoesNotExist:
-        bt_address = Address()
+    except BTAddress.DoesNotExist:
+        bt_address = BTAddress()
         bt_address.customer = bt_customer
 
     if not bt_address.created or customer.modified > bt_address.updated:
@@ -36,41 +36,3 @@ def sync_customer(customer):
 
         bt_address.push()
         bt_address.save()
-
-
-"""
-def check_credit_card(access):
-    customer = access.customer
-
-    if customer.braintree_creditcard_saved:
-        try:
-            credit_card = braintree.CreditCard.find(
-                customer.braintree_creditcard_token
-            )
-
-        except NotFoundError:
-            customer.braintree_creditcard_saved = None
-            customer.braintree_creditcard_token = None
-            customer.save()
-
-    return customer.braintree_creditcard_token and \
-           customer.braintree_creditcard_saved
-
-
-def get_subscription(access):
-    customer = access.customer
-
-
-    if customer.braintree_subscription:
-        try:
-            subscription = braintree.Subscription.find(
-                customer.braintree_subscription
-            )
-
-            return subscription
-        except NotFoundError:
-            customer.braintree_subscription = None
-            customer.save()
-
-    return None
-"""

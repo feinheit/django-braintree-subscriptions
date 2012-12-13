@@ -12,7 +12,7 @@ NULLABLE = {'blank': True, 'null': True}
 CACHED = {'editable': False, 'blank': True, 'null': True}
 
 
-class Customer(BTSyncedModel):
+class BTCustomer(BTSyncedModel):
     collection = braintree.Customer
 
     id = models.OneToOneField('customers.Customer',
@@ -26,8 +26,12 @@ class Customer(BTSyncedModel):
     phone = models.CharField(max_length=255, **NULLABLE)
     website = models.URLField(**NULLABLE)
 
-    plans = models.ManyToManyField('Plan', through='Subscription',
+    plans = models.ManyToManyField('BTPlan', through='BTSubscription',
         related_name='customers')
+
+    class Meta:
+        verbose_name = _('Customer')
+        verbose_name_plural = _('Customers')
 
     def __unicode__(self):
         return self.full_name
@@ -45,11 +49,11 @@ class Customer(BTSyncedModel):
         return u'%s %s' % (self.first_name, self.last_name)
 
 
-class Address(BTSyncedModel):
+class BTAddress(BTSyncedModel):
     collection = braintree.Address
 
     code = models.CharField(max_length=100, unique=True)
-    customer = models.ForeignKey(Customer, related_name='addresses')
+    customer = models.ForeignKey(BTCustomer, related_name='addresses')
 
     first_name = models.CharField(max_length=255, **NULLABLE)
     last_name = models.CharField(max_length=255, **NULLABLE)
@@ -62,6 +66,10 @@ class Address(BTSyncedModel):
     country_code_alpha2 = models.CharField(max_length=255, **NULLABLE)
 
     serialize_exclude = ('id',)
+
+    class Meta:
+        verbose_name = _('Address')
+        verbose_name_plural = _('Addresses')
 
     def __unicode__(self):
         return self.code
@@ -79,7 +87,7 @@ class Address(BTSyncedModel):
 
     @classmethod
     def unserialize(cls, data):
-        address = Address()
+        address = BTAddress()
         for key, value in data.__dict__.iteritems():
             if hasattr(address, key):
                 setattr(address, key, value)
@@ -91,7 +99,7 @@ class Address(BTSyncedModel):
             self.code = result.address.id
 
 
-class CreditCardManager(models.Manager):
+class BTCreditCardManager(models.Manager):
 
     def has_default(self):
         return self.filter(default=True).count() == 1
@@ -100,11 +108,11 @@ class CreditCardManager(models.Manager):
         return self.get(default=True)
 
 
-class CreditCard(BTMirroredModel):
+class BTCreditCard(BTMirroredModel):
     collection = braintree.CreditCard
 
     token = models.CharField(max_length=100, unique=True)
-    customer = models.ForeignKey(Customer, related_name='credit_cards')
+    customer = models.ForeignKey(BTCustomer, related_name='credit_cards')
 
     # There should be only one per customer!
     default = models.NullBooleanField(**CACHED)
@@ -121,10 +129,14 @@ class CreditCard(BTMirroredModel):
     country_of_issuance = models.CharField(max_length=255, **CACHED)
     issuing_bank = models.CharField(max_length=255, **CACHED)
 
-    objects = CreditCardManager()
+    objects = BTCreditCardManager()
 
     # There are more boolean fields in braintree available, yet i don't think
     # We need them for now
+
+    class Meta:
+        verbose_name = _('Credit Card')
+        verbose_name_plural = _('Credit Cards')
 
     def __unicode__(self):
         return self.mask
@@ -148,7 +160,7 @@ class CreditCard(BTMirroredModel):
         self.customer_id = int(data.customer_id)
 
 
-class Plan(BTMirroredModel):
+class BTPlan(BTMirroredModel):
     collection = braintree.Plan
 
     plan_id = models.CharField(max_length=100, unique=True)
@@ -169,6 +181,10 @@ class Plan(BTMirroredModel):
     # Timestamp from braintree
     created_at = models.DateTimeField(**CACHED)
     updated_at = models.DateTimeField(**CACHED)
+
+    class Meta:
+        verbose_name = _('Plan')
+        verbose_name_plural = _('Plans')
 
     def __unicode__(self):
         return self.name if self.name else self.plan_id
@@ -196,14 +212,18 @@ class Plan(BTMirroredModel):
         return u'%s %s', (self.price, self.currency_iso_code)
 
 
-class AddOn(models.Model):
-    plan = models.ForeignKey(Plan, related_name='add_ons')
+class BTAddOn(models.Model):
+    plan = models.ForeignKey(BTPlan, related_name='add_ons')
     addon_id = models.CharField(max_length=255, unique=True, **CACHED)
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
+
+    class Meta:
+        verbose_name = _('Add-on')
+        verbose_name_plural = _('Add-ons')
 
     def __unicode__(self):
         return self.name if self.name else self.addon_id
@@ -214,9 +234,9 @@ class AddOn(models.Model):
 
         for addon in addons:
             try:
-                instance = AddOn.objects.get(plan=plan, addon_id=addon.id)
-            except AddOn.DoesNotExist:
-                instance = AddOn(plan=plan, addon_id=addon.id)
+                instance = BTAddOn.objects.get(plan=plan, addon_id=addon.id)
+            except BTAddOn.DoesNotExist:
+                instance = BTAddOn(plan=plan, addon_id=addon.id)
 
             for key, value in addon.__dict__.iteritems():
                 if hasattr(instance, key) and key != 'id':
@@ -227,14 +247,18 @@ class AddOn(models.Model):
         plan.add_ons.exclude(pk__in=saved_ids).delete()
 
 
-class Discount(models.Model):
-    plan = models.ForeignKey(Plan, related_name='discounts')
+class BTDiscount(models.Model):
+    plan = models.ForeignKey(BTPlan, related_name='discounts')
     discount_id = models.CharField(max_length=255, unique=True, **CACHED)
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
+
+    class Meta:
+        verbose_name = _('Discount')
+        verbose_name_plural = _('Discounts')
 
     def __unicode__(self):
         return self.name if self.name else self.discount_id
@@ -245,12 +269,12 @@ class Discount(models.Model):
 
         for discount in discounts:
             try:
-                instance = Discount.objects.get(
+                instance = BTDiscount.objects.get(
                     plan=plan,
                     discount_id=discount.id
                 )
-            except Discount.DoesNotExist:
-                instance = Discount(plan=plan, discount_id=discount.id)
+            except BTDiscount.DoesNotExist:
+                instance = BTDiscount(plan=plan, discount_id=discount.id)
 
             for key, value in discount.__dict__.iteritems():
                 if hasattr(instance, key) and key != 'id':
@@ -262,13 +286,13 @@ class Discount(models.Model):
         plan.discounts.exclude(pk__in=saved_ids).delete()
 
 
-class SubscriptionManager(models.Manager):
+class BTSubscriptionManager(models.Manager):
 
     def running(self):
         return self.filter(status__in=('Pending', 'Active', 'Past Due'))
 
 
-class Subscription(BTSyncedModel):
+class BTSubscription(BTSyncedModel):
     collection = braintree.Subscription
     pull_excluded_fields = ('id', 'plan_id', 'payment_method_token')
 
@@ -288,8 +312,8 @@ class Subscription(BTSyncedModel):
 
     subscription_id = models.CharField(max_length=255)
 
-    customer = models.ForeignKey(Customer, related_name='subscriptions')
-    plan = models.ForeignKey(Plan, related_name='subscriptions')
+    customer = models.ForeignKey(BTCustomer, related_name='subscriptions')
+    plan = models.ForeignKey(BTPlan, related_name='subscriptions')
 
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
 
@@ -305,9 +329,13 @@ class Subscription(BTSyncedModel):
     billing_day_of_month = models.IntegerField(**NULLABLE)
     start_immediately = models.NullBooleanField()
 
-    objects = SubscriptionManager()
+    objects = BTSubscriptionManager()
 
     serialize_excluded = ('id', 'customer', 'plan', 'subscription_id', 'status')
+
+    class Meta:
+        verbose_name = _('Subscription')
+        verbose_name_plural = _('Subscriptions')
 
     def __unicode__(self):
         return self.subscription_id
@@ -316,7 +344,7 @@ class Subscription(BTSyncedModel):
         """ Cancel this subscription instantly """
         result = self.collection.cancel(self.subscription_id)
         if result.is_success:
-            self.status = Subscription.CANCELED
+            self.status = BTSubscription.CANCELED
             self.save()
         return result
 
@@ -355,7 +383,7 @@ class Subscription(BTSyncedModel):
         return self.serialize_base()
 
 
-class Transaction(BTMirroredModel):
+class BTTransaction(BTMirroredModel):
     SALE = 'sale'
     CREDIT = 'credit'
 
@@ -368,7 +396,7 @@ class Transaction(BTMirroredModel):
     skip_import_fields = ('id', 'subscription', 'subscription_id')
 
     transaction_id = models.CharField(max_length=255)
-    subscription = models.ForeignKey(Subscription, related_name='transactions')
+    subscription = models.ForeignKey(BTSubscription, related_name='transactions')
 
     amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
     currency_iso_code = models.CharField(max_length=255, **CACHED)
@@ -376,6 +404,10 @@ class Transaction(BTMirroredModel):
     updated_at = models.DateField(**CACHED)
     status = models.CharField(max_length=255, **CACHED)
     type = models.CharField(max_length=255, **CACHED)
+
+    class Meta:
+        verbose_name = _('Transaction')
+        verbose_name_plural = _('Transactions')
 
     def __unicode__(self):
         return self.amount_dislay
@@ -393,13 +425,17 @@ class Transaction(BTMirroredModel):
                 setattr(self, key, value)
 
 
-class WebhookLog(models.Model):
+class BTWebhookLog(models.Model):
     """ A log of received webhook notficiations. Purley for debugging """
 
     received = models.DateTimeField(auto_now=True)
     kind = models.CharField(max_length=255)
     data = models.TextField(blank=True)
     exception = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = _('WebhookLog')
+        verbose_name_plural = _('WebhookLogs')
 
     def __unicode__(self):
         return self.kind
