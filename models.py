@@ -70,6 +70,7 @@ class BTAddress(BTSyncedModel):
     class Meta:
         verbose_name = _('Address')
         verbose_name_plural = _('Addresses')
+        get_latest_by = 'created'
 
     def __unicode__(self):
         return self.code
