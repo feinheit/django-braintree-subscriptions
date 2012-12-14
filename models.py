@@ -218,7 +218,7 @@ class BTPlan(BTMirroredModel):
 
 class BTAddOn(models.Model):
     plan = models.ForeignKey(BTPlan, related_name='add_ons')
-    addon_id = models.CharField(max_length=255, unique=True, **CACHED)
+    addon_id = models.CharField(max_length=255, **CACHED)
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
@@ -253,7 +253,7 @@ class BTAddOn(models.Model):
 
 class BTDiscount(models.Model):
     plan = models.ForeignKey(BTPlan, related_name='discounts')
-    discount_id = models.CharField(max_length=255, unique=True, **CACHED)
+    discount_id = models.CharField(max_length=255, **CACHED)
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
