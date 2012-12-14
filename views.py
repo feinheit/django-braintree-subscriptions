@@ -28,20 +28,25 @@ def index(request):
 
     card = customer.braintree.credit_cards.get_default()
 
+    plans = BTPlan.objects.all().order_by('-price')
     subscriptions = customer.braintree.subscriptions.running()
     subscribed_plan_ids = subscriptions.values_list('plan__id')
-    unsubscribed_plans = BTPlan.objects.exclude(id__in=subscribed_plan_ids)
 
     return render(request, 'payments/index.html', {
         'card': card,
-        'unsubscribed_plans': unsubscribed_plans,
-        'subscriptions': subscriptions
+        'plans': plans,
+        'subscriptions': subscriptions,
+        'subscribed_plan_ids': subscribed_plan_ids
     })
 
 
 @access(access.MANAGER)
 def add_credit_card(request):
     customer = request.access.customer
+
+    # optionally set plan to subscribe after the credit card has been confirmed
+    if 'subscribe' in request.GET:
+        request.session['subscribe_directly'] = request.GET['subscribe']
 
     try:
         sync_customer(request.access.customer)
@@ -94,7 +99,13 @@ def confirm_credit_card(request):
         )
         creditcard.pull()
         creditcard.save()
-        return redirect('payment_index')
+
+        if 'subscribe_direct' in request.session:
+            plan_id = request.session['subscribe_directly']
+            del request.session['subscribe_directly']
+            return redirect('payment_subscribe', plan_id=plan_id)
+        else:
+            return redirect('payment_index')
     else:
         return render(request, 'payments/validation_error.html', {
             'result': result
