@@ -171,7 +171,7 @@ class BTPlan(BTMirroredModel):
 
     name = models.CharField(max_length=100, **CACHED)
     description = models.TextField(**CACHED)
-    price = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    price = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
     currency_iso_code = models.CharField(max_length=100, **CACHED)
 
     billing_day_of_month = models.IntegerField(**CACHED)
@@ -222,7 +222,7 @@ class BTAddOn(models.Model):
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
-    amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
     class Meta:
@@ -257,7 +257,7 @@ class BTDiscount(models.Model):
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
-    amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
     class Meta:
@@ -322,7 +322,7 @@ class BTSubscription(BTSyncedModel):
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
 
     # Overriden details
-    price = models.DecimalField(max_digits=5, decimal_places=2, **NULLABLE)
+    price = models.DecimalField(max_digits=10, decimal_places=2, **NULLABLE)
     number_of_billing_cycles = models.IntegerField(**NULLABLE)
 
     trial_period = models.NullBooleanField()
@@ -402,7 +402,7 @@ class BTTransaction(BTMirroredModel):
     transaction_id = models.CharField(max_length=255)
     subscription = models.ForeignKey(BTSubscription, related_name='transactions')
 
-    amount = models.DecimalField(max_digits=5, decimal_places=2, **CACHED)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
     currency_iso_code = models.CharField(max_length=255, **CACHED)
     created_at = models.DateField(**CACHED)
     updated_at = models.DateField(**CACHED)
