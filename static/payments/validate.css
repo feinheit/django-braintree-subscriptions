@@ -30,9 +30,14 @@
   background-image: url('cards/discover.png');
 }
 
-#expiration-control {
-    width: 320px;
+#expiration-cvv-control .controls {
     float: left;
+    display: inline-block;
+    margin: 0 0 0 20px;
+}
+
+#expiration-cvv-control label[for='cvv'] {
+    width: 108px;
 }
 
 #expiration_month {
@@ -49,12 +54,6 @@
     border-top-left-radius: 0px;
     border-bottom-left-radius: 0px;
     margin-left: -3px;
-}
-
-#cvv-control {
-    width: 200px;
-    float: right;
-    clear: both;
 }
 
 #cvv-control .control-label {
