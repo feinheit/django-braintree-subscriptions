@@ -1,10 +1,18 @@
 
+#add-card-form {
+    margin: 0;
+}
+
 #add-card-form .control-label {
     width: 130px;
 }
 
 #add-card-form .controls {
     margin-left: 150px;
+}
+
+.card-form-body {
+    padding: 20px;
 }
 
 #card_number {
@@ -46,6 +54,10 @@
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
     margin-right: -2px;
+}
+
+#card-modal .modal-body {
+    padding: 0;
 }
 
 #expiration_year {
