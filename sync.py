@@ -17,7 +17,7 @@ class BTSyncedModel(models.Model):
     collection = None
 
     # Our timestamps, not to be confused the the braintree timestamps
-    created = models.DateTimeField(editable=False, null=True)
+    created = models.DateTimeField(editable=False, null=True, auto_now_add=True)
     updated = models.DateTimeField(editable=False, null=True)
 
     # Timestamp are never synced
