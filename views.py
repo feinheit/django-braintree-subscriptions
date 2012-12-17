@@ -24,7 +24,11 @@ from models import BTWebhookLog
 def index(request):
     customer = request.access.customer
 
-    sync_customer(customer)
+    try:
+        sync_customer(request.access.customer)
+    except ValidationError as e:
+        messages.error(request, e)
+        return redirect('payment_error')
 
     card = customer.braintree.credit_cards.get_default()
 
@@ -47,12 +51,6 @@ def add_credit_card(request):
     # optionally set plan to subscribe after the credit card has been confirmed
     if 'subscribe' in request.GET:
         request.session['subscribe_directly'] = request.GET['subscribe']
-
-    try:
-        sync_customer(request.access.customer)
-    except ValidationError as e:
-        messages.error(request, e)
-        return redirect('payment_error')
 
     #cc_token = str(uuid.uuid1())
 
