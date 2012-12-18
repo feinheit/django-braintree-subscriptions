@@ -34,7 +34,7 @@ def index(request):
 
     plans = BTPlan.objects.all().order_by('-price')
     subscriptions = customer.braintree.subscriptions.running()
-    subscribed_plan_ids = subscriptions.values_list('plan__id')
+    subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
 
     return render(request, 'payments/index.html', {
         'card': card,
