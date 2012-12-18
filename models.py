@@ -437,10 +437,10 @@ class BTTransaction(BTMirroredModel):
         verbose_name_plural = _('Transactions')
 
     def __unicode__(self):
-        return self.amount_dislay
+        return self.amount_display
 
     @property
-    def amount_dislay(self):
+    def amount_display(self):
         return u'%s %s' % (self.amount, self.currency_iso_code)
 
     def braintree_key(self):
