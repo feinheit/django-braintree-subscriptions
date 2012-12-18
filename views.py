@@ -98,7 +98,7 @@ def confirm_credit_card(request):
         creditcard.pull()
         creditcard.save()
 
-        if 'subscribe_direct' in request.session:
+        if 'subscribe_directly' in request.session:
             plan_id = request.session['subscribe_directly']
             del request.session['subscribe_directly']
             return redirect('payment_subscribe', plan_id=plan_id)
