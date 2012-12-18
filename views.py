@@ -40,13 +40,17 @@ def index(request):
     subscriptions = customer.braintree.subscriptions.running()
     active_subscription = subscriptions[0] if subscriptions else None
     subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
+    transactions = BTTransaction.objects.filter(
+        subscription__customer=customer.braintree
+    )
 
     return render(request, 'payments/index.html', {
         'card': card,
         'plans': plans,
         'subscriptions': subscriptions,
         'active_subscription': active_subscription,
-        'subscribed_plan_ids': subscribed_plan_ids
+        'subscribed_plan_ids': subscribed_plan_ids,
+        'transactions': transactions
     })
 
 

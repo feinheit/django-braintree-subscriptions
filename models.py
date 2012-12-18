@@ -427,8 +427,12 @@ class BTTransaction(BTMirroredModel):
 
     amount = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
     currency_iso_code = models.CharField(max_length=255, **CACHED)
-    created_at = models.DateField(**CACHED)
-    updated_at = models.DateField(**CACHED)
+
+    credit_card = models.CharField(max_length=100, **CACHED)
+
+    created_at = models.DateTimeField(**CACHED)
+    updated_at = models.DateTimeField(**CACHED)
+
     status = models.CharField(max_length=255, **CACHED)
     type = models.CharField(max_length=255, **CACHED)
 
@@ -450,6 +454,8 @@ class BTTransaction(BTMirroredModel):
         for key, value in data.__dict__.iteritems():
             if hasattr(self, key) and key not in self.skip_import_fields:
                 setattr(self, key, value)
+
+            self.credit_card = u'%(bin)s******%(last_4)s' % data.credit_card
 
 
 class BTWebhookLog(models.Model):
