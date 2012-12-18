@@ -6,6 +6,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from .sync import BTSyncedModel, BTMirroredModel
 
+from jsonfield import JSONField
 
 # Common attributes sets for fields
 NULLABLE = {'blank': True, 'null': True}
@@ -319,20 +320,12 @@ class BTSubscription(BTSyncedModel):
     customer = models.ForeignKey(BTCustomer, related_name='subscriptions')
     plan = models.ForeignKey(BTPlan, related_name='subscriptions')
 
-    status = models.CharField(max_length=255, choices=STATUS_CHOICES)
-
-    # Overriden details
     price = models.DecimalField(max_digits=10, decimal_places=2, **NULLABLE)
     number_of_billing_cycles = models.IntegerField(
         help_text=_('Leave empty for endless subscriptions'), **NULLABLE)
 
-    trial_period = models.NullBooleanField()
-    trial_duration = models.IntegerField(**NULLABLE)
-    trial_duration_unit = models.CharField(max_length=255, **NULLABLE)
-
-    first_billing_date = models.DateField(**NULLABLE)
-    billing_day_of_month = models.IntegerField(**NULLABLE)
-    start_immediately = models.NullBooleanField()
+    status = models.CharField(max_length=255, choices=STATUS_CHOICES)
+    data = JSONField(**NULLABLE)
 
     objects = BTSubscriptionManager()
 
@@ -408,6 +401,14 @@ class BTSubscription(BTSyncedModel):
             }
         })
         return data
+
+    def import_data(self, data):
+        super(BTSubscription, self).import_data(data)
+        data_dict = data.__dict__.copy()
+        data_dict.pop('gateway', None)
+        data_dict.pop('transactions', None)
+        data_dict.pop('descriptor', None)
+        self.data = data_dict
 
 
 class BTTransaction(BTMirroredModel):
