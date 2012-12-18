@@ -148,13 +148,27 @@ class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
         'plan'
     )
     list_filter = ('plan', 'status')
-    readonly_fields = ('subscription_id', 'status')
     inlines = [BTTransactionInlineAdmin]
     actions = ('cancel_subscriptions',)
 
     def cancel_subscriptions(self, request, queryset):
         for subscription in queryset:
             subscription.cancel()
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return (
+                'subscription_id',
+                'status',
+                'trial_period',
+                'trial_duration',
+                'trial_duration_unit',
+                'first_billing_date',
+                'billing_day_of_month',
+                'start_immediately'
+            )
+        else:
+            return ('subscription_id', 'status')
 
 
 class BTWebhookLogAdmin(admin.ModelAdmin):

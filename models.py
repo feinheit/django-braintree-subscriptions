@@ -323,7 +323,8 @@ class BTSubscription(BTSyncedModel):
 
     # Overriden details
     price = models.DecimalField(max_digits=10, decimal_places=2, **NULLABLE)
-    number_of_billing_cycles = models.IntegerField(**NULLABLE)
+    number_of_billing_cycles = models.IntegerField(
+        help_text=_('Leave empty for endless subscriptions'), **NULLABLE)
 
     trial_period = models.NullBooleanField()
     trial_duration = models.IntegerField(**NULLABLE)
@@ -336,6 +337,12 @@ class BTSubscription(BTSyncedModel):
     objects = BTSubscriptionManager()
 
     serialize_excluded = ('id', 'customer', 'plan', 'subscription_id', 'status')
+    updateable_fields = (
+        'plan_id',
+        'payment_method_token',
+        'price',
+        'number_of_billing_cycles'
+    )
 
     class Meta:
         verbose_name = _('Subscription')
@@ -368,10 +375,15 @@ class BTSubscription(BTSyncedModel):
         # Intentionally raise DoesNotExist here if 0 or >1 default cards
         card = self.customer.credit_cards.get_default()
         data = self.serialize(exclude=self.serialize_excluded)
+
+        if not self.number_of_billing_cycles:
+            data['never_expires'] = True
+
         data.update({
             'plan_id': self.plan.plan_id,
             'payment_method_token': card.token,
         })
+
         return data
 
     def serialize_create(self):
@@ -384,7 +396,18 @@ class BTSubscription(BTSyncedModel):
         return data
 
     def serialize_update(self):
-        return self.serialize_base()
+        data = self.serialize_base()
+
+        for key in data.keys():
+            if key not in self.updateable_fields:
+                data.pop(key, None)
+
+        data.update({
+            "options": {
+                "prorate_charges": True
+            }
+        })
+        return data
 
 
 class BTTransaction(BTMirroredModel):

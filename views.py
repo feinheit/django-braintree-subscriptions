@@ -30,16 +30,22 @@ def index(request):
         messages.error(request, e)
         return redirect('payment_error')
 
+    # take care if customer has multiple subscriptions
+    if customer.braintree.subscriptions.running().count() > 1:
+        return redirect('payment_multiple_subscriptions')
+
     card = customer.braintree.credit_cards.get_default()
 
     plans = BTPlan.objects.all().order_by('-price')
     subscriptions = customer.braintree.subscriptions.running()
+    active_subscription = subscriptions[0] if subscriptions else None
     subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
 
     return render(request, 'payments/index.html', {
         'card': card,
         'plans': plans,
         'subscriptions': subscriptions,
+        'active_subscription': active_subscription,
         'subscribed_plan_ids': subscribed_plan_ids
     })
 
@@ -169,7 +175,7 @@ def unsubscribe(request, subscription_id):
     if result.is_success:
         messages.warning(request,
             _('Your subscription to %(plan)s was canceled') % {
-                'plan': subscription.plan_id
+                'plan': subscription.plan
             }
         )
         return redirect('payment_index')
@@ -183,6 +189,44 @@ def unsubscribe(request, subscription_id):
         return render(request, 'payments/validation_error.html', {
             'result': result
         })
+
+
+@access(access.MANAGER)
+def downgrade_to_free_plan(request):
+    subscriptions = request.access.customer.braintree.subscriptions.running()
+
+    for subscription in subscriptions:
+        subscription.cancel()
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def change_to_plan(request, plan_id):
+    customer = request.access.customer
+    plan = get_object_or_404(BTPlan, plan_id=plan_id)
+
+    # The must be exactly one running subscription
+    if not customer.braintree.subscriptions.running().count() == 1:
+        messages.error(request, _('You have no active subscription'))
+        return redirect('payment_index')
+
+    subscription = customer.braintree.subscriptions.running()[0]
+
+    subscription.plan = plan
+    subscription.price = plan.price
+    subscription.push()
+    subscription.save()
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def multiple_subscriptions(request):
+    customer = request.access.customer
+    return render(request, 'payments/multiple_subscriptions.html', {
+        'subscriptions': customer.braintree.subscriptions.running()
+    })
 
 
 def bt_to_dict(resource):
