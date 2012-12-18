@@ -45,11 +45,11 @@
 }
 
 #expiration-cvv-control label[for='cvv'] {
-    width: 108px;
+    width: 128px;
 }
 
 #expiration_month {
-    width: 80px;
+    width: 60px;
     text-align: center;
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;

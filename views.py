@@ -68,7 +68,6 @@ def add_credit_card(request):
                 "options": {
                     "make_default": True,
                     "verify_card": True,
-                    "fail_on_duplicate_payment_method": True,
                 }
             }
         },
@@ -97,12 +96,20 @@ def confirm_credit_card(request):
     result = braintree.TransparentRedirect.confirm(query_string)
 
     if result.is_success:
+        # unset default credit card
+        customer.braintree.credit_cards.update(default=False)
+
         creditcard = BTCreditCard(
             token=result.credit_card.token,
             customer=customer.braintree
         )
         creditcard.pull()
         creditcard.save()
+
+        # update subscriptions to use new card
+        for subscription in customer.braintree.subscriptions.running():
+            subscription.push()
+            subscription.save()
 
         if 'subscribe_directly' in request.session:
             plan_id = request.session['subscribe_directly']
@@ -114,13 +121,6 @@ def confirm_credit_card(request):
         return render(request, 'payments/validation_error.html', {
             'result': result
         })
-
-
-@access(access.MANAGER)
-def delete_credit_card(request, token):
-    card = get_object_or_404(BTCreditCard, token=token)
-    card.delete()
-    return redirect('payment_index')
 
 
 @access(access.MANAGER)

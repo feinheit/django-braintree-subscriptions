@@ -121,8 +121,8 @@ class BTCreditCard(BTMirroredModel):
     # There should be only one per customer!
     default = models.NullBooleanField(**CACHED)
 
-    bin = models.IntegerField(**CACHED)
-    last_4 = models.IntegerField(**CACHED)
+    bin = models.CharField(max_length=255, **CACHED)
+    last_4 = models.CharField(max_length=255, **CACHED)
     cardholder_name = models.CharField(max_length=255, **CACHED)
     expiration_month = models.IntegerField(**CACHED)
     expiration_year = models.IntegerField(**CACHED)

@@ -3,3 +3,12 @@ table.plans th,
 table.plans td {
     line-height: 30px;
 }
+
+table.plans td.actions {
+    text-align: right;
+}
+
+.btn-right {
+    float: right;
+    margin-right: 8px;
+}
