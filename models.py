@@ -254,7 +254,13 @@ class BTSubscriptionManager(models.Manager):
 
 class BTSubscription(BTSyncedModel):
     collection = braintree.Subscription
-    pull_excluded_fields = ('id', 'plan_id', 'payment_method_token')
+    pull_excluded_fields = (
+        'id',
+        'plan_id',
+        'payment_method_token',
+        'add_ons',
+        'discounts'
+    )
 
     PENDING = 'Pending'
     ACTIVE = 'Active'
@@ -372,10 +378,10 @@ class BTSubscription(BTSyncedModel):
 
     def import_data(self, data):
         super(BTSubscription, self).import_data(data)
+        # TODO: UGLY, fix this
         data_dict = data.__dict__.copy()
-        data_dict.pop('gateway', None)
-        data_dict.pop('transactions', None)
-        data_dict.pop('descriptor', None)
+        for k in ('gateway', 'transactions', 'descriptor', 'add_ons', 'discounts'):
+            data_dict.pop(k, None)
         self.data = data_dict
 
 

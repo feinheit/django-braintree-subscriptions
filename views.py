@@ -226,6 +226,7 @@ def enable_addon(request, sub_id, addon_id):
 
     if result.is_success:
         subscription.add_ons.add(add_on)
+        subscription.import_data(result.subscription)
         subscription.save()
         messages.success(request, u'Add-On %s successfully enabled' % addon_id)
     else:
@@ -252,6 +253,7 @@ def disable_addon(request, sub_id, addon_id):
 
     if result.is_success:
         subscription.add_ons.remove(add_on)
+        subscription.import_data(result.subscription)
         subscription.save()
         messages.success(request, u'Add-On %s successfully disabled' % addon_id)
     else:
