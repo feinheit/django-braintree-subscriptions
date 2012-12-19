@@ -63,14 +63,6 @@ class BTMirroredModelAdminMixin(object):
         obj.delete_from_vault()
         obj.delete()
 
-    def save_related(self, request, form, formsets, change):
-        form.save_m2m()
-        for formset in formsets:
-            self.save_formset(request, form, formset, change=change)
-
-        if form.instance:
-            form.instance.pull_related()
-
 
 class BTAddressInlineAdmin(BTSyncedModelAdminMixin, admin.StackedInline):
     model = models.BTAddress
@@ -99,29 +91,16 @@ class BTCustomerAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     actions = ('bt_pull',)
 
 
-class BTAddOnInline(BTMirroredModelAdminMixin, admin.StackedInline):
-    model = models.BTAddOn
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
+class BTAddOnAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
+    pass
 
 
-class BTDiscountInline(BTMirroredModelAdminMixin, admin.StackedInline):
-    model = models.BTDiscount
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
+class BTDiscountAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
+    pass
 
 
 class BTPlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
     list_display = ('name', 'price', 'currency_iso_code')
-    inlines = (BTAddOnInline, BTDiscountInline)
     actions = ('import_all',)
 
     def import_all(self, request, queryset):
@@ -165,6 +144,8 @@ class BTWebhookLogAdmin(admin.ModelAdmin):
 
 admin.site.register(models.BTCustomer, BTCustomerAdmin)
 admin.site.register(models.BTPlan, BTPlanAdmin)
+admin.site.register(models.BTAddOn, BTAddOnAdmin)
+admin.site.register(models.BTDiscount, BTDiscountAdmin)
 admin.site.register(models.BTSubscription, BTSubscriptionAdmin)
 
 admin.site.register(models.BTWebhookLog, BTWebhookLogAdmin)

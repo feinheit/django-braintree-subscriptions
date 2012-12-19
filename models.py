@@ -115,6 +115,7 @@ class BTCreditCardManager(models.Manager):
 
 class BTCreditCard(BTMirroredModel):
     collection = braintree.CreditCard
+    pull_excluded_fields = ('id', 'customer_id')
 
     token = models.CharField(max_length=100, unique=True)
     customer = models.ForeignKey(BTCustomer, related_name='credit_cards')
@@ -159,9 +160,7 @@ class BTCreditCard(BTMirroredModel):
         return (self.token or '0',)
 
     def import_data(self, data):
-        for key, value in data.__dict__.iteritems():
-            if hasattr(self, key):
-                setattr(self, key, value)
+        super(BTCreditCard, self).import_data(data)
         self.customer_id = int(data.customer_id)
 
 
@@ -183,6 +182,9 @@ class BTPlan(BTMirroredModel):
     trial_duration = models.IntegerField(**CACHED)
     trial_duration_unit = models.CharField(max_length=100, **CACHED)
 
+    #add_ons = models.ManyToManyField('BTAddOn', related_name='plans')
+    #discounts = models.ManyToManyField('BTDiscount', related_name='plans')
+
     # Timestamp from braintree
     created_at = models.DateTimeField(**CACHED)
     updated_at = models.DateTimeField(**CACHED)
@@ -197,29 +199,15 @@ class BTPlan(BTMirroredModel):
     def braintree_key(self):
         return (self.plan_id,)
 
-    def import_data(self, data):
-        for key, value in data.__dict__.iteritems():
-            if hasattr(self, key) and key != 'id':
-                field = self._meta.get_field_by_name(key)[0]
-                if not issubclass(field.__class__, RelatedObject):
-                    setattr(self, key, value)
-
-    # Addons and Discounts
-    def import_related(self, data):
-        for key, value in data.__dict__.iteritems():
-            if hasattr(self, key) and key != 'id':
-                field = self._meta.get_field_by_name(key)[0]
-                if issubclass(field.__class__, RelatedObject):
-                    field.model.import_related(self, value)
-
     @property
     def price_display(self):
         return u'%s %s', (self.price, self.currency_iso_code)
 
 
-class BTAddOn(models.Model):
-    plan = models.ForeignKey(BTPlan, related_name='add_ons')
-    addon_id = models.CharField(max_length=255, **CACHED)
+class BTAddOn(BTMirroredModel):
+    collection = braintree.AddOn
+    #plan = models.ForeignKey(BTPlan, related_name='add_ons')
+    addon_id = models.CharField(max_length=255, unique=True)
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
@@ -233,28 +221,14 @@ class BTAddOn(models.Model):
     def __unicode__(self):
         return self.name if self.name else self.addon_id
 
-    @classmethod
-    def import_related(cls, plan, addons):
-        saved_ids = []
-
-        for addon in addons:
-            try:
-                instance = BTAddOn.objects.get(plan=plan, addon_id=addon.id)
-            except BTAddOn.DoesNotExist:
-                instance = BTAddOn(plan=plan, addon_id=addon.id)
-
-            for key, value in addon.__dict__.iteritems():
-                if hasattr(instance, key) and key != 'id':
-                    setattr(instance, key, value)
-            instance.save()
-            saved_ids.append(instance.id)
-
-        plan.add_ons.exclude(pk__in=saved_ids).delete()
+    def braintree_key(self):
+        return (self.addon_id,)
 
 
-class BTDiscount(models.Model):
-    plan = models.ForeignKey(BTPlan, related_name='discounts')
-    discount_id = models.CharField(max_length=255, **CACHED)
+class BTDiscount(BTMirroredModel):
+    collection = braintree.Discount
+    #plan = models.ForeignKey(BTPlan, related_name='discounts')
+    discount_id = models.CharField(max_length=255, unique=True)
 
     name = models.CharField(max_length=255, **CACHED)
     description = models.TextField(**CACHED)
@@ -268,27 +242,8 @@ class BTDiscount(models.Model):
     def __unicode__(self):
         return self.name if self.name else self.discount_id
 
-    @classmethod
-    def import_related(cls, plan, discounts):
-        saved_ids = []
-
-        for discount in discounts:
-            try:
-                instance = BTDiscount.objects.get(
-                    plan=plan,
-                    discount_id=discount.id
-                )
-            except BTDiscount.DoesNotExist:
-                instance = BTDiscount(plan=plan, discount_id=discount.id)
-
-            for key, value in discount.__dict__.iteritems():
-                if hasattr(instance, key) and key != 'id':
-                    setattr(instance, key, value)
-            instance.save()
-            saved_ids.append(instance.id)
-
-        # Delte all untouched ids
-        plan.discounts.exclude(pk__in=saved_ids).delete()
+    def braintree_key(self):
+        return (self.discount_id,)
 
 
 class BTSubscriptionManager(models.Manager):
@@ -315,7 +270,7 @@ class BTSubscription(BTSyncedModel):
         (CANCELED, _('Canceled'))
     )
 
-    subscription_id = models.CharField(max_length=255)
+    subscription_id = models.CharField(max_length=255, unique=True)
 
     customer = models.ForeignKey(BTCustomer, related_name='subscriptions')
     plan = models.ForeignKey(BTPlan, related_name='subscriptions')
@@ -327,9 +282,22 @@ class BTSubscription(BTSyncedModel):
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
     data = JSONField(**NULLABLE)
 
+    add_ons = models.ManyToManyField(BTAddOn, related_name='subscriptions',
+        **NULLABLE)
+    discounts = models.ManyToManyField(BTDiscount, related_name='subscriptions',
+        **NULLABLE)
+
     objects = BTSubscriptionManager()
 
-    serialize_excluded = ('id', 'customer', 'plan', 'subscription_id', 'status')
+    serialize_excluded = (
+        'id',
+        'customer',
+        'plan',
+        'subscription_id',
+        'status',
+        'data'
+    )
+
     updateable_fields = (
         'plan_id',
         'payment_method_token',
@@ -421,9 +389,9 @@ class BTTransaction(BTMirroredModel):
     )
 
     collection = braintree.Transaction
-    skip_import_fields = ('id', 'subscription', 'subscription_id')
+    pull_excluded_fields = ('id', 'subscription', 'subscription_id')
 
-    transaction_id = models.CharField(max_length=255)
+    transaction_id = models.CharField(max_length=255, unique=True)
     subscription = models.ForeignKey(BTSubscription, related_name='transactions')
 
     amount = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
@@ -452,11 +420,8 @@ class BTTransaction(BTMirroredModel):
         return (self.transaction_id,)
 
     def import_data(self, data):
-        for key, value in data.__dict__.iteritems():
-            if hasattr(self, key) and key not in self.skip_import_fields:
-                setattr(self, key, value)
-
-            self.credit_card = u'%(bin)s******%(last_4)s' % data.credit_card
+        super(BTTransaction, self).import_data(data)
+        self.credit_card = u'%(bin)s******%(last_4)s' % data.credit_card
 
 
 class BTWebhookLog(models.Model):

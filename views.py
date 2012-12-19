@@ -219,7 +219,15 @@ def change_to_plan(request, plan_id):
 
     subscription.plan = plan
     subscription.price = plan.price
-    subscription.push()
+    try:
+        result = subscription.push()
+    except ValidationError:
+        # Check if subscription is already canceled
+        if '81901' in [e.code for e in result.errors.deep_errors]:
+            subscription.status = BTSubscription.CANCELED
+            subscription.save()
+            messages.warning(request, _('Your subscription is canceled. '
+                'Please subscribe again for a plan'))
     subscription.save()
 
     return redirect('payment_index')
@@ -267,12 +275,17 @@ def handle_webhook_notficiation(notification):
         plan = BTPlan.objects.get(plan_id=plan_id)
 
         # Update subscription
-        subscription, created = BTSubscription.objects.get_or_create(
-            subscription_id=notification.subscription.id,
-            customer=card.customer,
-            plan=plan
-        )
+        try:
+            subscription = BTSubscription.objects.get(
+                subscription_id=notification.subscription.id
+            )
+        except BTSubscription.DoesNotExist:
+            subscription = BTSubscription(
+                subscription_id=notification.subscription.id,
+                customer=card.customer,
+            )
 
+        subscription.plan = plan
         subscription.import_data(notification.subscription)
         subscription.save()
 

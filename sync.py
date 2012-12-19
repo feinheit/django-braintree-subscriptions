@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from braintree.exceptions.not_found_error import NotFoundError
 from braintree.exceptions.unexpected_error import UnexpectedError
 
@@ -5,7 +7,7 @@ from django.db import models
 from django.db.models.fields.related import RelatedObject
 from django.core.exceptions import ValidationError
 from django.forms.models import model_to_dict
-from django.utils.timezone import now
+from django.utils.timezone import now, utc, make_aware
 
 
 class BTSyncedModel(models.Model):
@@ -133,6 +135,8 @@ class BTMirroredModel(models.Model):
     # This is the vault data collection we mirror from
     collection = None
 
+    pull_excluded_fields = ('id',)
+
     class Meta:
         abstract = True
 
@@ -148,12 +152,19 @@ class BTMirroredModel(models.Model):
         raise NotImplementedError('braintree_key() not implemented')
 
     def import_data(self, data):
-        """ How the data from the vault into the instance """
-        raise NotImplementedError('import_data(data) not implemented')
+        """ Overwrite this for custom import logic """
+        for key, value in data.__dict__.iteritems():
+            if hasattr(self, key) and key not in self.pull_excluded_fields:
+                field = self._meta.get_field_by_name(key)[0]
+                if issubclass(value.__class__, (date, datetime)):
+                    value = make_aware(value, utc)
+
+                if not issubclass(field.__class__, RelatedObject):
+                    setattr(self, key, value)
 
     def import_related(self, data):
-        """ import related objects from vault """
-        raise NotImplementedError('import_releated(data) not implemented')
+        """ Overwrite this to import related objects on pull """
+        pass
 
     def reset_fields(self):
         """ empty all cached fields from the model """
@@ -184,17 +195,6 @@ class BTMirroredModel(models.Model):
             self.import_data(self.data)
         else:
             self.reset_fields()
-
-    def pull_related(self):
-        if not self.data:
-            self.get_data_from_vault()
-
-        for field_name in self._meta.get_all_field_names():
-            field = self._meta.get_field_by_name(field_name)[0]
-            if issubclass(field.__class__, RelatedObject) and \
-               hasattr(field.model, 'import_related'):
-                related_objects = getattr(self.data, field_name, ())
-                field.model.import_related(self, related_objects)
 
     def delete_from_vault(self):
         """ Remove object from vault if present """
