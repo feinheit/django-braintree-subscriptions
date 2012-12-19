@@ -15,8 +15,8 @@ from ..accounts import access
 
 from .utils import sync_customer
 
-from models import BTCreditCard, BTPlan, BTAddOn, BTSubscription, BTTransaction
-from models import BTWebhookLog
+from models import BTCreditCard, BTPlan, BTAddOn, BTDiscount
+from models import BTSubscription, BTTransaction, BTWebhookLog
 
 
 # TODO: Add decorator to directly receive customer in each view
@@ -43,10 +43,6 @@ def index(request):
     subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
 
     add_ons = BTAddOn.objects.all()
-    if active_subscription:
-        active_add_ons = active_subscription.add_ons.all()
-    else:
-        active_add_ons = []
 
     transactions = BTTransaction.objects.filter(
         subscription__customer=customer.braintree
@@ -59,7 +55,6 @@ def index(request):
         'active_subscription': active_subscription,
         'subscribed_plan_ids': subscribed_plan_ids,
         'add_ons': add_ons,
-        'active_add_ons': active_add_ons,
         'transactions': transactions
     })
 
@@ -256,6 +251,32 @@ def disable_addon(request, sub_id, addon_id):
         subscription.import_data(result.subscription)
         subscription.save()
         messages.success(request, u'Add-On %s successfully disabled' % addon_id)
+    else:
+        messages.error(request, result.message)
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def add_discount(request, sub_id):
+    subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
+    discount_id = request.REQUEST.get('discount_id', '')
+
+    try:
+        discount = BTDiscount.objects.get(discount_id=discount_id)
+    except BTDiscount.DoesNotExist:
+        messages.error(request, _('Sorry, your discount code is invalid'))
+        return redirect('payment_index')
+
+    result = braintree.Subscription.update(sub_id, {
+        'discounts': {'add': [{'inherited_from_id': discount_id}]}
+    })
+
+    if result.is_success:
+        subscription.discounts.add(discount)
+        subscription.import_data(result.subscription)
+        subscription.save()
+        messages.success(request, u'Discount successfully added')
     else:
         messages.error(request, result.message)
 

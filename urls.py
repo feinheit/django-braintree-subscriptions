@@ -61,6 +61,12 @@ urlpatterns = patterns('keetab_cp.payments.views',
         name='payment_disable_addon'
     ),
 
+    # Discount Management
+    url(
+        regex=r'discount/(?P<sub_id>\w+)/add/$',
+        view='add_discount',
+        name='payment_add_discount'
+    ),
 
     # Webhooks and helper views
     url(
