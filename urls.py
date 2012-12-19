@@ -8,6 +8,7 @@ urlpatterns = patterns('keetab_cp.payments.views',
         name='payment_index'
     ),
 
+    # Credit card management
     url(
         regex=r'^card/add/$',
         view='add_credit_card',
@@ -19,6 +20,7 @@ urlpatterns = patterns('keetab_cp.payments.views',
         name='payment_confirm_credit_card'
     ),
 
+    # Subscription management
     url(
         regex=r'^subscribe/(?P<plan_id>\w+)/',
         view='subscribe',
@@ -47,6 +49,20 @@ urlpatterns = patterns('keetab_cp.payments.views',
         name='payment_downgrade_to_free_plan'
     ),
 
+    # Addon Management
+    url(
+        regex=r'addon/(?P<sub_id>\w+)/enable/(?P<addon_id>\w+)/$',
+        view='enable_addon',
+        name='payment_enable_addon'
+    ),
+    url(
+        regex=r'addon/(?P<sub_id>\w+)/disable/(?P<addon_id>\w+)/$',
+        view='disable_addon',
+        name='payment_disable_addon'
+    ),
+
+
+    # Webhooks and helper views
     url(
         regex=r'^webhook/$',
         view='webhook',

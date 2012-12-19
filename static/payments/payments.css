@@ -1,10 +1,9 @@
 
-table.plans th,
-table.plans td {
+.table th, .table td {
     line-height: 30px;
 }
 
-table.plans td.actions {
+td.actions {
     text-align: right;
 }
 

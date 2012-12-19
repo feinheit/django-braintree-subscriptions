@@ -92,11 +92,11 @@ class BTCustomerAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
 
 
 class BTAddOnAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
-    pass
+    list_display = ('name', 'description', 'amount')
 
 
 class BTDiscountAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
-    pass
+    list_display = ('name', 'description', 'amount')
 
 
 class BTPlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):

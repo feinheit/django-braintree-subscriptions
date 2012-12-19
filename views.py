@@ -15,7 +15,7 @@ from ..accounts import access
 
 from .utils import sync_customer
 
-from models import BTCreditCard, BTPlan, BTSubscription, BTTransaction
+from models import BTCreditCard, BTPlan, BTAddOn, BTSubscription, BTTransaction
 from models import BTWebhookLog
 
 
@@ -37,9 +37,17 @@ def index(request):
     card = customer.braintree.credit_cards.get_default()
 
     plans = BTPlan.objects.all().order_by('-price')
+
     subscriptions = customer.braintree.subscriptions.running()
     active_subscription = subscriptions[0] if subscriptions else None
     subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
+
+    add_ons = BTAddOn.objects.all()
+    if active_subscription:
+        active_add_ons = active_subscription.add_ons.all()
+    else:
+        active_add_ons = []
+
     transactions = BTTransaction.objects.filter(
         subscription__customer=customer.braintree
     )
@@ -50,6 +58,8 @@ def index(request):
         'subscriptions': subscriptions,
         'active_subscription': active_subscription,
         'subscribed_plan_ids': subscribed_plan_ids,
+        'add_ons': add_ons,
+        'active_add_ons': active_add_ons,
         'transactions': transactions
     })
 
@@ -201,6 +211,51 @@ def downgrade_to_free_plan(request):
 
     for subscription in subscriptions:
         subscription.cancel()
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def enable_addon(request, sub_id, addon_id):
+    subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
+    add_on = get_object_or_404(BTAddOn, addon_id=addon_id)
+
+    result = braintree.Subscription.update(sub_id, {
+        'add_ons': {'add': [{'inherited_from_id': addon_id}]}
+    })
+
+    if result.is_success:
+        subscription.add_ons.add(add_on)
+        subscription.save()
+        messages.success(request, u'Add-On %s successfully enabled' % addon_id)
+    else:
+        messages.error(request, result.message)
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def disable_addon(request, sub_id, addon_id):
+    subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
+    add_on = get_object_or_404(BTAddOn, addon_id=addon_id)
+
+    if add_on not in subscription.add_ons.all():
+        messages.error(_('%(add_on)s is not enabled for %(sub)s') % {
+            'add_on': add_on,
+            'sub': subscription
+        })
+        return redirect('payment_index')
+
+    result = braintree.Subscription.update(sub_id, {
+        'add_ons': {'remove': [str(addon_id)]}
+    })
+
+    if result.is_success:
+        subscription.add_ons.remove(add_on)
+        subscription.save()
+        messages.success(request, u'Add-On %s successfully disabled' % addon_id)
+    else:
+        messages.error(request, result.message)
 
     return redirect('payment_index')
 
