@@ -385,8 +385,8 @@ def handle_webhook_notficiation(notification):
         log.data = pformat(bt_to_dict(notification.subscription), indent=2)
 
         token = notification.subscription.payment_method_token
-        card = BTCreditCard.objects.get(token=token)
 
+        card = BTCreditCard.objects.get(token=token)
         plan_id = notification.subscription.plan_id
         plan = BTPlan.objects.get(plan_id=plan_id)
 
@@ -415,8 +415,13 @@ def handle_webhook_notficiation(notification):
 
                 trans.import_data(transaction)
                 trans.save()
+    except BTCreditCard.DoesNotExist:
+        log.exception = 'Credit Card not present'
+    except BTPlan.DoesNotExist:
+        log.exception = 'Plan not present'
     except:
         log.exception = traceback.format_exc()
+        # this is bad, reraise error
         raise
     finally:
         log.save()
