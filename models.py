@@ -1,7 +1,9 @@
 import braintree
 
+from datetime import timedelta
+
 from django.db import models
-from django.db.models.fields.related import RelatedObject
+from django.utils.timezone import now
 from django.utils.translation import ugettext_lazy as _
 
 from .sync import BTSyncedModel, BTMirroredModel
@@ -396,6 +398,14 @@ class BTSubscribedAddOn(models.Model):
 
     def __unicode__(self):
         return u'%s -> %s' % (self.subscription, self.add_on)
+
+    @property
+    def disableable_by(self):
+        return (self.created + timedelta(days=30)).date()
+
+    @property
+    def is_disableable(self):
+        return now().date() >= self.disableable_by
 
 
 class BTSubscribedDiscount(models.Model):

@@ -3,13 +3,14 @@ import braintree
 import traceback
 from pprint import pformat
 
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.http import HttpResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import formats
 from django.utils.translation import ugettext_lazy as _
+from django.views.decorators.csrf import csrf_exempt
 
 from ..accounts import access
 
@@ -42,10 +43,19 @@ def index(request):
     plans = BTPlan.objects.all()
 
     active_sub = subscriptions[0] if subscriptions else None
-    active_addons = active_sub.add_ons.all() if active_sub else None
+
     subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
 
     add_ons = BTAddOn.objects.all()
+    if active_sub:
+        for add_on in add_ons:
+            try:
+                add_on.subscription = BTSubscribedAddOn.objects.get(
+                    subscription=active_sub,
+                    add_on=add_on
+                )
+            except BTSubscribedAddOn.DoesNotExist:
+                pass
 
     transactions = BTTransaction.objects.for_customer(customer.braintree)
 
@@ -56,7 +66,6 @@ def index(request):
         'active_subscription': active_sub,
         'subscribed_plan_ids': subscribed_plan_ids,
         'add_ons': add_ons,
-        'active_addons': active_addons,
         'transactions': transactions
     })
 
@@ -239,11 +248,24 @@ def disable_addon(request, sub_id, addon_id):
     subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
     add_on = get_object_or_404(BTAddOn, addon_id=addon_id)
 
-    if add_on not in subscription.add_ons.all():
-        messages.error(_('%(add_on)s is not enabled for %(sub)s') % {
+    try:
+        subscribed_add_on = BTSubscribedAddOn.objects.get(
+            subscription=subscription,
+            add_on=add_on
+        )
+    except BTSubscribedAddOn.DoesNotExist:
+        messages.error(request, _('%(add_on)s is not enabled for %(sub)s') % {
             'add_on': add_on,
             'sub': subscription
         })
+        return redirect('payment_index')
+
+    if not subscribed_add_on.is_disableable:
+        messages.error(request,
+            _('This Add-On cannot be disabled before %(date)s') % {
+                'date': formats.date_format(subscribed_add_on.disableable_by)
+            }
+        )
         return redirect('payment_index')
 
     result = braintree.Subscription.update(sub_id, {
@@ -262,11 +284,7 @@ def disable_addon(request, sub_id, addon_id):
         messages.error(request, result.message)
 
     if delete_addon:
-        sub_add_on = BTSubscribedAddOn.objects.get(
-            subscription=subscription,
-            add_on=add_on
-        )
-        sub_add_on.delete()
+        subscribed_add_on.delete()
         messages.success(request, u'Add-On %s successfully disabled' % addon_id)
 
     return redirect('payment_index')
