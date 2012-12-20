@@ -381,6 +381,15 @@ class BTSubscription(BTSyncedModel):
             data_dict.pop(k, None)
         self.data = data_dict
 
+    @property
+    def next_billing_amount(self):
+        if 'next_billing_period_amount' in self.data:
+            next_amount = self.data['next_billing_period_amount']
+            balance = self.data.get('balance', 0.0)
+            return max(balance + next_amount, 0.0)
+        else:
+            return _('Unknown')
+
 
 class BTSubscribedAddOn(models.Model):
     subscription = models.ForeignKey(BTSubscription,
