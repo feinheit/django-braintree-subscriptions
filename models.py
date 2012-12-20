@@ -311,7 +311,8 @@ class BTSubscription(BTSyncedModel):
         'plan_id',
         'payment_method_token',
         'price',
-        'number_of_billing_cycles'
+        'number_of_billing_cycles',
+        'never_expires'
     )
 
     class Meta:
@@ -368,7 +369,7 @@ class BTSubscription(BTSyncedModel):
 
         data.update({
             "options": {
-                "prorate_charges": True,
+                "prorate_charges": True
             }
         })
         return data
@@ -403,6 +404,8 @@ class BTSubscribedAddOn(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
+        verbose_name = _('Subscribed add-on')
+        verbose_name_plural = _('Subscribed add-ons')
         unique_together = (('subscription', 'add_on'),)
 
     def __unicode__(self):
@@ -429,6 +432,8 @@ class BTSubscribedDiscount(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
+        verbose_name = _('Subscribed discount')
+        verbose_name_plural = _('Subscribed discounts')
         unique_together = (('subscription', 'discount'),)
 
     def __unicode__(self):
