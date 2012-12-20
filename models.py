@@ -192,6 +192,7 @@ class BTPlan(BTMirroredModel):
     class Meta:
         verbose_name = _('Plan')
         verbose_name_plural = _('Plans')
+        ordering = ('-price',)
 
     def __unicode__(self):
         return self.name if self.name else self.plan_id
@@ -379,6 +380,12 @@ class BTSubscription(BTSyncedModel):
         self.data = data_dict
 
 
+class BTTransactionManager(models.Manager):
+
+    def for_customer(self, customer):
+        return self.filter(subscription__customer=customer)
+
+
 class BTTransaction(BTMirroredModel):
     SALE = 'sale'
     CREDIT = 'credit'
@@ -405,9 +412,12 @@ class BTTransaction(BTMirroredModel):
     status = models.CharField(max_length=255, **CACHED)
     type = models.CharField(max_length=255, **CACHED)
 
+    objects = BTTransactionManager()
+
     class Meta:
         verbose_name = _('Transaction')
         verbose_name_plural = _('Transactions')
+        ordering = ('-created_at',)
 
     def __unicode__(self):
         return self.amount_display

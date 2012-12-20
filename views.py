@@ -30,31 +30,32 @@ def index(request):
         messages.error(request, e)
         return redirect('payment_error')
 
+    subscriptions = customer.braintree.subscriptions.running().select_related()
+
     # take care if customer has multiple subscriptions
-    if customer.braintree.subscriptions.running().count() > 1:
+    if subscriptions.count() > 1:
         return redirect('payment_multiple_subscriptions')
 
     card = customer.braintree.credit_cards.get_default()
 
-    plans = BTPlan.objects.all().order_by('-price')
+    plans = BTPlan.objects.all()
 
-    subscriptions = customer.braintree.subscriptions.running()
-    active_subscription = subscriptions[0] if subscriptions else None
+    active_sub = subscriptions[0] if subscriptions else None
+    active_addons = active_sub.add_ons.all() if active_sub else None
     subscribed_plan_ids = subscriptions.values_list('plan__plan_id', flat=True)
 
     add_ons = BTAddOn.objects.all()
 
-    transactions = BTTransaction.objects.filter(
-        subscription__customer=customer.braintree
-    )
+    transactions = BTTransaction.objects.for_customer(customer.braintree)
 
     return render(request, 'payments/index.html', {
         'card': card,
         'plans': plans,
         'subscriptions': subscriptions,
-        'active_subscription': active_subscription,
+        'active_subscription': active_sub,
         'subscribed_plan_ids': subscribed_plan_ids,
         'add_ons': add_ons,
+        'active_addons': active_addons,
         'transactions': transactions
     })
 
