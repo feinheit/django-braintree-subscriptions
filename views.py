@@ -16,7 +16,8 @@ from ..accounts import access
 from .utils import sync_customer
 
 from models import BTCreditCard, BTPlan, BTAddOn, BTDiscount
-from models import BTSubscription, BTTransaction, BTWebhookLog
+from models import BTSubscription, BTSubscribedAddOn, BTSubscribedDiscount
+from models import BTTransaction, BTWebhookLog
 
 
 # TODO: Add decorator to directly receive customer in each view
@@ -221,7 +222,9 @@ def enable_addon(request, sub_id, addon_id):
     })
 
     if result.is_success:
-        subscription.add_ons.add(add_on)
+        sub_add_on = BTSubscribedAddOn(subscription=subscription, add_on=add_on)
+        sub_add_on.save()
+
         subscription.import_data(result.subscription)
         subscription.save()
         messages.success(request, u'Add-On %s successfully enabled' % addon_id)
@@ -248,12 +251,23 @@ def disable_addon(request, sub_id, addon_id):
     })
 
     if result.is_success:
-        subscription.add_ons.remove(add_on)
+        delete_addon = True
         subscription.import_data(result.subscription)
         subscription.save()
-        messages.success(request, u'Add-On %s successfully disabled' % addon_id)
+    elif '92016' in (error.code for error in result.errors.deep_errors):
+        # Add-On is already deleted on braintree
+        delete_addon = True
     else:
+        delete_addon = False
         messages.error(request, result.message)
+
+    if delete_addon:
+        sub_add_on = BTSubscribedAddOn.objects.get(
+            subscription=subscription,
+            add_on=add_on
+        )
+        sub_add_on.delete()
+        messages.success(request, u'Add-On %s successfully disabled' % addon_id)
 
     return redirect('payment_index')
 
@@ -274,7 +288,12 @@ def add_discount(request, sub_id):
     })
 
     if result.is_success:
-        subscription.discounts.add(discount)
+        discount = BTSubscribedDiscount(
+            subscription=subscription,
+            discount=discount
+        )
+        discount.save()
+
         subscription.import_data(result.subscription)
         subscription.save()
         messages.success(request, u'Discount successfully added')

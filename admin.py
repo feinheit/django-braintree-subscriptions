@@ -106,13 +106,22 @@ class BTPlanAdmin(BTMirroredModelAdminMixin, admin.ModelAdmin):
     actions = ('import_all',)
 
     def import_all(self, request, queryset):
-        import braintree
         plans = braintree.Plan.all()
         for plan in plans:
             plan, created = models.Plan.objects_get_or_create(plan_id=plan.id)
             plan.import_data(plan)
             plan.import_related(plan)
             plan.save()
+
+
+class BTSubscribedAddOnInline(admin.TabularInline):
+    model = models.BTSubscribedAddOn
+    extra = 0
+
+
+class BTSubscribedDiscountInline(admin.TabularInline):
+    model = models.BTSubscribedDiscount
+    extra = 0
 
 
 class BTTransactionInlineAdmin(BTMirroredModelAdminMixin, admin.TabularInline):
@@ -131,7 +140,11 @@ class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     list_filter = ('plan', 'status')
     readonly_fields = ('subscription_id', 'status', 'data')
     filter_horizontal = ('add_ons', 'discounts')
-    inlines = [BTTransactionInlineAdmin]
+    inlines = [
+        BTSubscribedAddOnInline,
+        BTSubscribedDiscountInline,
+        BTTransactionInlineAdmin
+    ]
     actions = ('cancel_subscriptions',)
 
     def cancel_subscriptions(self, request, queryset):
@@ -147,11 +160,17 @@ class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
             sub = form.instance
 
             addons = [
-                {'inherited_from_id': a.addon_id} for a in sub.add_ons.all()
+                {
+                    'inherited_from_id': a.add_on.addon_id,
+                    'quantity': a.quantity
+                } for a in sub.subscribed_addons.all()
             ]
 
             discounts = [
-                {'inherited_from_id': a.discount_id} for a in sub.discounts.all()
+                {
+                    'inherited_from_id': d.discount.discount_id,
+                    'quantity': d.quantity
+                } for d in sub.subscribed_discounts.all()
             ]
 
             result = braintree.Subscription.update(sub.subscription_id, {

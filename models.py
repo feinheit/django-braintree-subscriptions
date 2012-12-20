@@ -289,10 +289,10 @@ class BTSubscription(BTSyncedModel):
     status = models.CharField(max_length=255, choices=STATUS_CHOICES)
     data = JSONField(**NULLABLE)
 
-    add_ons = models.ManyToManyField(BTAddOn, related_name='subscriptions',
-        **NULLABLE)
-    discounts = models.ManyToManyField(BTDiscount, related_name='subscriptions',
-        **NULLABLE)
+    add_ons = models.ManyToManyField(BTAddOn, through='BTSubscribedAddOn',
+        related_name='subscriptions', **NULLABLE)
+    discounts = models.ManyToManyField(BTDiscount, through='BTSubscribedDiscount',
+        related_name='subscriptions', **NULLABLE)
 
     objects = BTSubscriptionManager()
 
@@ -378,6 +378,42 @@ class BTSubscription(BTSyncedModel):
         for k in ('gateway', 'transactions', 'descriptor', 'add_ons', 'discounts'):
             data_dict.pop(k, None)
         self.data = data_dict
+
+
+class BTSubscribedAddOn(models.Model):
+    subscription = models.ForeignKey(BTSubscription,
+        related_name='subscribed_addons')
+    add_on = models.ForeignKey(BTAddOn,
+        related_name='subscribed_addons')
+
+    quantity = models.IntegerField(default=1)
+
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (('subscription', 'add_on'),)
+
+    def __unicode__(self):
+        return u'%s -> %s' % (self.subscription, self.add_on)
+
+
+class BTSubscribedDiscount(models.Model):
+    subscription = models.ForeignKey(BTSubscription,
+        related_name='subscribed_discounts')
+    discount = models.ForeignKey(BTDiscount,
+        related_name='subscribed_discounts')
+
+    quantity = models.IntegerField(default=1)
+
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (('subscription', 'discount'),)
+
+    def __unicode__(self):
+        return u'%s -> %s' % (self.subscription, self.discount)
 
 
 class BTTransactionManager(models.Manager):
