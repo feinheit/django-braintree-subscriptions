@@ -354,7 +354,13 @@ class BTSubscription(BTSyncedModel):
         return data
 
     def serialize_create(self):
-        return self.serialize_base()
+        data = self.serialize_base()
+        data.update({
+            'options': {
+                'do_not_inherit_add_ons_or_discounts': True
+            }
+        })
+        return data
 
     def serialize_update(self):
         data = self.serialize_base()
