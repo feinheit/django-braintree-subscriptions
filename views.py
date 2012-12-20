@@ -231,15 +231,23 @@ def enable_addon(request, sub_id, addon_id):
         'add_ons': {'add': [{'inherited_from_id': addon_id}]}
     })
 
-    if result.is_success:
-        sub_add_on = BTSubscribedAddOn(subscription=subscription, add_on=add_on)
-        sub_add_on.save()
+    save_addon = True
 
+    if result.is_success:
         subscription.import_data(result.subscription)
         subscription.save()
-        messages.success(request, u'Add-On %s successfully enabled' % addon_id)
+    elif '91911' in (error.code for error in result.errors.deep_errors):
+        # Add-on is already active! Just continue and save add-on
+        # TODO: We should check the quantity here
+        pass
     else:
+        save_addon = False
         messages.error(request, result.message)
+
+    if save_addon:
+        sub_add_on = BTSubscribedAddOn(subscription=subscription, add_on=add_on)
+        sub_add_on.save()
+        messages.success(request, u'Add-On %s successfully enabled' % addon_id)
 
     return redirect('payment_index')
 
@@ -273,13 +281,14 @@ def disable_addon(request, sub_id, addon_id):
         'add_ons': {'remove': [str(addon_id)]}
     })
 
+    delete_addon = True
+
     if result.is_success:
-        delete_addon = True
         subscription.import_data(result.subscription)
         subscription.save()
     elif '92016' in (error.code for error in result.errors.deep_errors):
-        # Add-On is already deleted on braintree
-        delete_addon = True
+        # Add-On is already deleted on braintree, just delete it locally
+        pass
     else:
         delete_addon = False
         messages.error(request, result.message)
