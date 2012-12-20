@@ -192,6 +192,7 @@ class BTPlan(BTMirroredModel):
     class Meta:
         verbose_name = _('Plan')
         verbose_name_plural = _('Plans')
+        ordering = ('-price',)
 
     def __unicode__(self):
         return self.name if self.name else self.plan_id
@@ -354,13 +355,7 @@ class BTSubscription(BTSyncedModel):
         return data
 
     def serialize_create(self):
-        data = self.serialize_base()
-        data.update({
-            'options': {
-                'do_not_inherit_add_ons_or_discounts': True
-            }
-        })
-        return data
+        return self.serialize_base()
 
     def serialize_update(self):
         data = self.serialize_base()
@@ -383,6 +378,12 @@ class BTSubscription(BTSyncedModel):
         for k in ('gateway', 'transactions', 'descriptor', 'add_ons', 'discounts'):
             data_dict.pop(k, None)
         self.data = data_dict
+
+
+class BTTransactionManager(models.Manager):
+
+    def for_customer(self, customer):
+        return self.filter(subscription__customer=customer)
 
 
 class BTTransaction(BTMirroredModel):
@@ -411,9 +412,12 @@ class BTTransaction(BTMirroredModel):
     status = models.CharField(max_length=255, **CACHED)
     type = models.CharField(max_length=255, **CACHED)
 
+    objects = BTTransactionManager()
+
     class Meta:
         verbose_name = _('Transaction')
         verbose_name_plural = _('Transactions')
+        ordering = ('-created_at',)
 
     def __unicode__(self):
         return self.amount_display
