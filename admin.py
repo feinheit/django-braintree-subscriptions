@@ -3,7 +3,9 @@ from django.db.models import TextField
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.utils.translation import ugettext_lazy as _
 
+import braintree
 
 import models
 
@@ -128,12 +130,42 @@ class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
     )
     list_filter = ('plan', 'status')
     readonly_fields = ('subscription_id', 'status', 'data')
+    filter_horizontal = ('add_ons', 'discounts')
     inlines = [BTTransactionInlineAdmin]
     actions = ('cancel_subscriptions',)
 
     def cancel_subscriptions(self, request, queryset):
         for subscription in queryset:
             subscription.cancel()
+
+    def save_related(self, request, form, formsets, change):
+        form.save_m2m()
+        for formset in formsets:
+            self.save_formset(request, form, formset, change=change)
+
+        if change:
+            sub = form.instance
+
+            addons = [
+                {'inherited_from_id': a.addon_id} for a in sub.add_ons.all()
+            ]
+
+            discounts = [
+                {'inherited_from_id': a.discount_id} for a in sub.discounts.all()
+            ]
+
+            result = braintree.Subscription.update(sub.subscription_id, {
+                "options": {
+                    "replace_all_add_ons_and_discounts": True
+                },
+                "add_ons": {"add": addons},
+                "discounts": {"add": discounts}
+            })
+
+            if result.is_success:
+                messages.info(request, _('Add-Ons and Discounts updated'))
+            else:
+                messages.error(request, result.message)
 
 
 class BTWebhookLogAdmin(admin.ModelAdmin):

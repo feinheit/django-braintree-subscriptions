@@ -366,7 +366,7 @@ class BTSubscription(BTSyncedModel):
 
         data.update({
             "options": {
-                "prorate_charges": True
+                "prorate_charges": True,
             }
         })
         return data
