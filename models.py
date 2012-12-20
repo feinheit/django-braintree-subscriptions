@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.db import models
 from django.utils.timezone import now
+from django.core.exceptions import ValidationError
 from django.utils.translation import ugettext_lazy as _
 
 from .sync import BTSyncedModel, BTMirroredModel
@@ -321,6 +322,20 @@ class BTSubscription(BTSyncedModel):
 
     def __unicode__(self):
         return self.subscription_id
+
+    def clean(self):
+        customer_payment_tokens = self.customer.credit_cards.values_list(
+            'token', flat=True
+        )
+        search_results = self.collection.search(
+            braintree.SubscriptionSearch.status == BTSubscription.ACTIVE
+        )
+
+        for subscription in search_results.items:
+            if subscription.payment_method_token in customer_payment_tokens:
+                raise ValidationError(
+                    _('Customer already has an active subscription!')
+                )
 
     def cancel(self):
         """ Cancel this subscription instantly """

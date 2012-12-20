@@ -14,10 +14,11 @@ class BTSyncedModelAdminMixin(object):
     def save_model(self, request, obj, form, change):
         try:
             obj.push()
-            obj.save()
         except ValidationError as e:
             msg = u'Braintree push error: %s' % e.messages[0]
             messages.error(request, msg)
+
+        obj.save()
 
     def save_related(self, request, form, formsets, change):
         form.save_m2m()

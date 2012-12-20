@@ -162,6 +162,7 @@ def subscribe(request, plan_id):
     subscription.plan = plan
 
     try:
+        subscription.clean()
         subscription.push()
         # Webhooks COULD have already saved this subscription
         try:
