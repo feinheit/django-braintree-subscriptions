@@ -280,6 +280,11 @@ class BTSubscription(BTSyncedModel):
         (CANCELED, _('Canceled'))
     )
 
+    TRIAL_DURATION_CHOICES = (
+        ('day', _('days')),
+        ('month', _('months'))
+    )
+
     subscription_id = models.CharField(max_length=255, unique=True)
 
     customer = models.ForeignKey(BTCustomer, related_name='subscriptions')
@@ -289,31 +294,49 @@ class BTSubscription(BTSyncedModel):
     number_of_billing_cycles = models.IntegerField(
         help_text=_('Leave empty for endless subscriptions'), **NULLABLE)
 
-    status = models.CharField(max_length=255, choices=STATUS_CHOICES)
-    data = JSONField(**NULLABLE)
+    trial_period = models.BooleanField()
+    trial_duration = models.IntegerField(**NULLABLE)
+    trial_duration_unit = models.CharField(max_length=255,
+        choices=TRIAL_DURATION_CHOICES, **NULLABLE)
 
-    add_ons = models.ManyToManyField(BTAddOn, through='BTSubscribedAddOn',
-        related_name='subscriptions', **NULLABLE)
-    discounts = models.ManyToManyField(BTDiscount, through='BTSubscribedDiscount',
-        related_name='subscriptions', **NULLABLE)
+    # Active add-ons and discounts
+    add_ons = models.ManyToManyField(BTAddOn, related_name='subscriptions',
+        through='BTSubscribedAddOn', **NULLABLE)
+    discounts = models.ManyToManyField(BTDiscount, related_name='subscriptions',
+        through='BTSubscribedDiscount', **NULLABLE)
 
-    objects = BTSubscriptionManager()
+    # Subscription state fields
+    status = models.CharField(max_length=255, choices=STATUS_CHOICES, **CACHED)
 
-    serialize_excluded = (
-        'id',
-        'customer',
-        'plan',
-        'subscription_id',
-        'status',
-        'data'
+    balance = models.DecimalField(max_digits=10, decimal_places=2, **CACHED)
+
+    next_billing_period_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, **CACHED
     )
+
+    billing_day_of_month = models.SmallIntegerField(**CACHED)
+    billing_period_start_date = models.DateTimeField(**CACHED)
+    billing_period_end_date = models.DateTimeField(**CACHED)
+    paid_through_date = models.DateTimeField(**CACHED)
+
+    first_billing_date = models.DateTimeField(**CACHED)
+    next_billing_date = models.DateTimeField(**CACHED)
+
+    current_billing_cycle = models.IntegerField(**CACHED)
+
+    merchant_account_id = models.CharField(max_length=255, **CACHED)
+
+    days_past_due = models.IntegerField(**CACHED)
+
+    # Manager
+    objects = BTSubscriptionManager()
 
     updateable_fields = (
         'plan_id',
         'payment_method_token',
         'price',
         'number_of_billing_cycles',
-        'never_expires'
+        'never_expires',
     )
 
     class Meta:
@@ -324,18 +347,19 @@ class BTSubscription(BTSyncedModel):
         return self.subscription_id
 
     def clean(self):
-        customer_payment_tokens = self.customer.credit_cards.values_list(
-            'token', flat=True
-        )
-        search_results = self.collection.search(
-            braintree.SubscriptionSearch.status == BTSubscription.ACTIVE
-        )
+        if not self.subscription_id:
+            customer_payment_tokens = self.customer.credit_cards.values_list(
+                'token', flat=True
+            )
+            search_results = self.collection.search(
+                braintree.SubscriptionSearch.status == BTSubscription.ACTIVE
+            )
 
-        for subscription in search_results.items:
-            if subscription.payment_method_token in customer_payment_tokens:
-                raise ValidationError(
-                    _('Customer already has an active subscription!')
-                )
+            for subscription in search_results.items:
+                if subscription.payment_method_token in customer_payment_tokens:
+                    raise ValidationError(
+                        _('Customer already has an active subscription!')
+                    )
 
     def cancel(self):
         """ Cancel this subscription instantly """
@@ -360,7 +384,15 @@ class BTSubscription(BTSyncedModel):
     def serialize_base(self):
         # Intentionally raise DoesNotExist here if 0 or >1 default cards
         card = self.customer.credit_cards.get_default()
-        data = self.serialize(exclude=self.serialize_excluded)
+
+        cached_fields = []
+        for field in self._meta.fields:
+            if field.null and not field.editable:
+                cached_fields.append(field.name)
+
+        excluded = ['id', 'customer', 'plan', 'subscription_id', 'data']
+
+        data = self.serialize(exclude=tuple(excluded + cached_fields))
 
         if not self.number_of_billing_cycles:
             data['never_expires'] = True
@@ -389,20 +421,10 @@ class BTSubscription(BTSyncedModel):
         })
         return data
 
-    def import_data(self, data):
-        super(BTSubscription, self).import_data(data)
-        # TODO: UGLY, fix this
-        data_dict = data.__dict__.copy()
-        for k in ('gateway', 'transactions', 'descriptor', 'add_ons', 'discounts'):
-            data_dict.pop(k, None)
-        self.data = data_dict
-
     @property
     def next_billing_amount(self):
-        if 'next_billing_period_amount' in self.data:
-            next_amount = self.data['next_billing_period_amount']
-            balance = self.data.get('balance', 0.0)
-            return max(balance + next_amount, 0.0)
+        if self.next_billing_period_amount and self.balance is not None:
+            return max(self.balance + self.next_billing_period_amount, 0.0)
         else:
             return _('Unknown')
 

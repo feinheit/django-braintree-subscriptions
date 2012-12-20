@@ -139,7 +139,6 @@ class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
         'plan'
     )
     list_filter = ('plan', 'status')
-    readonly_fields = ('subscription_id', 'status', 'data')
     filter_horizontal = ('add_ons', 'discounts')
     inlines = [
         BTSubscribedAddOnInline,
@@ -187,6 +186,21 @@ class BTSubscriptionAdmin(BTSyncedModelAdminMixin, admin.ModelAdmin):
             else:
                 messages.error(request, result.message)
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = ['subscription_id']
+
+        if obj:
+            readonly_fields += [
+                'trial_period',
+                'trial_duration',
+                'trial_duration_unit'
+            ]
+
+            for field in self.model._meta.fields:
+                if field.null and not field.editable:
+                    readonly_fields.append(field.name)
+
+        return readonly_fields
 
 class BTWebhookLogAdmin(admin.ModelAdmin):
     readonly_fields = ('received',)
