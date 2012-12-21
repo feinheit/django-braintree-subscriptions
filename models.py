@@ -262,8 +262,9 @@ class BTSubscription(BTSyncedModel):
         'id',
         'plan_id',
         'payment_method_token',
+        'number_of_billing_cycles',
         'add_ons',
-        'discounts'
+        'discounts',
     )
 
     PENDING = 'Pending'
@@ -423,10 +424,12 @@ class BTSubscription(BTSyncedModel):
 
     @property
     def next_billing_amount(self):
-        if self.next_billing_period_amount and self.balance is not None:
+        if self.number_of_billing_cycles == self.current_billing_cycle:
+            return 0.0
+        elif self.next_billing_period_amount and self.balance is not None:
             return max(self.balance + self.next_billing_period_amount, 0.0)
         else:
-            return _('Unknown')
+            return self.next_billing_period_amount or 0.0
 
 
 class BTSubscribedAddOn(models.Model):

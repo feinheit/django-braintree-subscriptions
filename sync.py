@@ -76,11 +76,12 @@ class BTSyncedModel(models.Model):
             result = self.collection.create(data)
             self.created = now()
 
-        if not result.is_success:
-            raise ValidationError(result.message)
-        else:
+        if result.is_success:
             self.on_pushed(result)
             self.updated = now()
+            return result
+        else:
+            raise ValidationError(result.message)
 
     def push_related(self):
         """ Implement this to automatically push related BTSyncedModels """

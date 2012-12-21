@@ -147,14 +147,13 @@ def confirm_credit_card(request):
 def subscribe(request, plan_id):
     customer = request.user.access.customer
     plan = get_object_or_404(BTPlan, plan_id=plan_id)
-    running_subscriptions = customer.braintree.subscriptions.running()
-
-    if running_subscriptions.filter(plan__plan_id=plan_id).count():
-        messages.info(request, _('You are already subscribed to this plan'))
-        return redirect('payment_index')
 
     if not customer.braintree.credit_cards.has_default():
         messages.error(request, _('No default Credit Card defined'))
+        return redirect('payment_index')
+
+    if customer.braintree.subscriptions.running().count() != 0:
+        messages.error(request, _('You are already signed to a plan'))
         return redirect('payment_index')
 
     subscription = BTSubscription()
@@ -163,14 +162,12 @@ def subscribe(request, plan_id):
 
     try:
         subscription.clean()
-        subscription.push()
+        result = subscription.push()
+        subscription.import_data(result.subscription)
         # Webhooks COULD have already saved this subscription
-        try:
-            subscription_id = subscription.subscription_id
-            BTSubscription.objects.get(subscription_id=subscription_id)
-        except BTSubscription.DoesNotExist:
-            # Save otherwise
+        if customer.braintree.subscriptions.running().count() == 0:
             subscription.save()
+
         messages.success(request,
             _('You have been successfully subscribed to plan %(plan)s') % {
                 'plan': plan_id
@@ -213,11 +210,75 @@ def unsubscribe(request, subscription_id):
 
 
 @access(access.MANAGER)
+def change_to_plan(request, plan_id):
+    customer = request.access.customer
+    plan = get_object_or_404(BTPlan, plan_id=plan_id)
+
+    running_subscriptions = customer.braintree.subscriptions.running()
+
+    if running_subscriptions.count() > 1:
+        return redirect('payment_multiple_subscriptions')
+    if running_subscriptions.count() == 0:
+        messages.error(request, _('You have no active subscription'))
+        return redirect('payment_index')
+    else:
+        subscription = running_subscriptions[0]
+
+    subscription.plan = plan
+    subscription.price = plan.price
+    subscription.number_of_billing_cycles = None
+
+    try:
+        result = subscription.push()
+        subscription.import_data(result.subscription)
+        subscription.save()
+    except ValidationError:
+        # Check if subscription is already canceled
+        if '81901' in [e.code for e in result.errors.deep_errors]:
+            subscription.status = BTSubscription.CANCELED
+            subscription.save()
+            messages.warning(request, _('Your subscription is canceled. '
+                'Please subscribe again for a plan'))
+        else:
+            messages.error(request, result.message)
+
+    return redirect('payment_index')
+
+
+@access(access.MANAGER)
+def multiple_subscriptions(request):
+    customer = request.access.customer
+    return render(request, 'payments/multiple_subscriptions.html', {
+        'subscriptions': customer.braintree.subscriptions.running()
+    })
+
+
+@access(access.MANAGER)
 def downgrade_to_free_plan(request):
     subscriptions = request.access.customer.braintree.subscriptions.running()
 
-    for subscription in subscriptions:
-        subscription.cancel()
+    if subscriptions.count() == 0:
+        messages.error(request, _('No active subscription found!'))
+        return redirect('payment_index')
+
+    subscription = subscriptions[0]
+
+    if subscription.current_billing_cycle is None:
+        messages.error(request, _('Current billing cycle unknown'))
+        return redirect('payment_index')
+
+    # Set current billing cylce as the last one
+    subscription.number_of_billing_cycles = subscription.current_billing_cycle
+    result = subscription.push()
+
+    if result.is_success:
+        subscription.import_data(result.subscription)
+        subscription.save()
+        messages.info(request,
+            _('Your subscription will end on the next billing date')
+        )
+    else:
+        messages.error(request, result.message)
 
     return redirect('payment_index')
 
@@ -329,42 +390,6 @@ def add_discount(request, sub_id):
         messages.error(request, result.message)
 
     return redirect('payment_index')
-
-
-@access(access.MANAGER)
-def change_to_plan(request, plan_id):
-    customer = request.access.customer
-    plan = get_object_or_404(BTPlan, plan_id=plan_id)
-
-    # The must be exactly one running subscription
-    if not customer.braintree.subscriptions.running().count() == 1:
-        messages.error(request, _('You have no active subscription'))
-        return redirect('payment_index')
-
-    subscription = customer.braintree.subscriptions.running()[0]
-
-    subscription.plan = plan
-    subscription.price = plan.price
-    try:
-        result = subscription.push()
-    except ValidationError:
-        # Check if subscription is already canceled
-        if '81901' in [e.code for e in result.errors.deep_errors]:
-            subscription.status = BTSubscription.CANCELED
-            subscription.save()
-            messages.warning(request, _('Your subscription is canceled. '
-                'Please subscribe again for a plan'))
-    subscription.save()
-
-    return redirect('payment_index')
-
-
-@access(access.MANAGER)
-def multiple_subscriptions(request):
-    customer = request.access.customer
-    return render(request, 'payments/multiple_subscriptions.html', {
-        'subscriptions': customer.braintree.subscriptions.running()
-    })
 
 
 def bt_to_dict(resource):
