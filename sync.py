@@ -28,6 +28,9 @@ class BTSyncedModel(models.Model):
     # These fields are never imported on pull
     pull_excluded_fields = ('id',)
 
+    # These fields are never pushed
+    push_excluded_fields = ()
+
     class Meta:
         get_latest_by = "created"
         abstract = True
@@ -41,7 +44,7 @@ class BTSyncedModel(models.Model):
         data = model_to_dict(self, exclude=self.always_exclude + exclude)
         for key in data.keys():
             value = data[key]
-            if value:
+            if value or key in self.push_excluded_fields:
                 data[key] = unicode(value)
             else:
                 del data[key]
