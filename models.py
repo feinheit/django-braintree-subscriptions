@@ -34,8 +34,8 @@ class BTCustomer(BTSyncedModel):
         related_name='customers')
 
     class Meta:
-        verbose_name = _('Customer')
-        verbose_name_plural = _('Customers')
+        verbose_name = _('customer')
+        verbose_name_plural = _('customers')
 
     def __unicode__(self):
         return self.full_name
@@ -72,9 +72,9 @@ class BTAddress(BTSyncedModel):
     serialize_exclude = ('id',)
 
     class Meta:
-        verbose_name = _('Address')
-        verbose_name_plural = _('Addresses')
         get_latest_by = 'created'
+        verbose_name = _('address')
+        verbose_name_plural = _('addresses')
 
     def __unicode__(self):
         return self.code
@@ -105,7 +105,6 @@ class BTAddress(BTSyncedModel):
 
 
 class BTCreditCardManager(models.Manager):
-
     def has_default(self):
         return self.filter(default=True).count() == 1
 
@@ -144,8 +143,8 @@ class BTCreditCard(BTMirroredModel):
     # We need them for now
 
     class Meta:
-        verbose_name = _('Credit Card')
-        verbose_name_plural = _('Credit Cards')
+        verbose_name = _('credit card')
+        verbose_name_plural = _('credit cards')
 
     def __unicode__(self):
         return self.mask
@@ -178,7 +177,8 @@ class BTPlan(BTMirroredModel):
     currency_iso_code = models.CharField(max_length=100, **CACHED)
 
     billing_day_of_month = models.IntegerField(**CACHED)
-    billing_frequency = models.IntegerField(help_text='in months', **CACHED)
+    billing_frequency = models.IntegerField(help_text=_('In months.'),
+        **CACHED)
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
     trial_period = models.NullBooleanField(**CACHED)
@@ -193,9 +193,9 @@ class BTPlan(BTMirroredModel):
     updated_at = models.DateTimeField(**CACHED)
 
     class Meta:
-        verbose_name = _('Plan')
-        verbose_name_plural = _('Plans')
         ordering = ('-price',)
+        verbose_name = _('plan')
+        verbose_name_plural = _('plans')
 
     def __unicode__(self):
         return self.name if self.name else self.plan_id
@@ -219,8 +219,8 @@ class BTAddOn(BTMirroredModel):
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
     class Meta:
-        verbose_name = _('Add-on')
-        verbose_name_plural = _('Add-ons')
+        verbose_name = _('add-on')
+        verbose_name_plural = _('add-ons')
 
     def __unicode__(self):
         return self.name if self.name else self.addon_id
@@ -240,8 +240,8 @@ class BTDiscount(BTMirroredModel):
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
     class Meta:
-        verbose_name = _('Discount')
-        verbose_name_plural = _('Discounts')
+        verbose_name = _('discount')
+        verbose_name_plural = _('discounts')
 
     def __unicode__(self):
         return self.name if self.name else self.discount_id
@@ -251,9 +251,12 @@ class BTDiscount(BTMirroredModel):
 
 
 class BTSubscriptionManager(models.Manager):
-
     def running(self):
-        return self.filter(status__in=('Pending', 'Active', 'Past Due'))
+        return self.filter(status__in=(
+            self.model.PENDING,
+            self.model.ACTIVE,
+            self.model.PAST_DUE,
+            ))
 
 
 class BTSubscription(BTSyncedModel):
@@ -274,11 +277,11 @@ class BTSubscription(BTSyncedModel):
     CANCELED = 'Canceled'
 
     STATUS_CHOICES = (
-        (PENDING, _('Pending')),
-        (ACTIVE, _('Active')),
-        (PAST_DUE, _('Past Due')),
-        (EXPIRED, _('Expired')),
-        (CANCELED, _('Canceled'))
+        (PENDING, _('pending')),
+        (ACTIVE, _('active')),
+        (PAST_DUE, _('past due')),
+        (EXPIRED, _('expired')),
+        (CANCELED, _('canceled'))
     )
 
     TRIAL_DURATION_CHOICES = (
@@ -293,7 +296,7 @@ class BTSubscription(BTSyncedModel):
 
     price = models.DecimalField(max_digits=10, decimal_places=2, **NULLABLE)
     number_of_billing_cycles = models.IntegerField(
-        help_text=_('Leave empty for endless subscriptions'), **NULLABLE)
+        help_text=_('Leave empty for endless subscriptions.'), **NULLABLE)
 
     trial_period = models.BooleanField()
     trial_duration = models.IntegerField(**NULLABLE)
@@ -341,8 +344,8 @@ class BTSubscription(BTSyncedModel):
     )
 
     class Meta:
-        verbose_name = _('Subscription')
-        verbose_name_plural = _('Subscriptions')
+        verbose_name = _('subscription')
+        verbose_name_plural = _('subscriptions')
 
     def __unicode__(self):
         return self.subscription_id
@@ -444,9 +447,9 @@ class BTSubscribedAddOn(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Subscribed add-on')
-        verbose_name_plural = _('Subscribed add-ons')
         unique_together = (('subscription', 'add_on'),)
+        verbose_name = _('subscribed add-on')
+        verbose_name_plural = _('subscribed add-ons')
 
     def __unicode__(self):
         return u'%s -> %s' % (self.subscription, self.add_on)
@@ -472,16 +475,15 @@ class BTSubscribedDiscount(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = _('Subscribed discount')
-        verbose_name_plural = _('Subscribed discounts')
         unique_together = (('subscription', 'discount'),)
+        verbose_name = _('subscribed discount')
+        verbose_name_plural = _('subscribed discounts')
 
     def __unicode__(self):
         return u'%s -> %s' % (self.subscription, self.discount)
 
 
 class BTTransactionManager(models.Manager):
-
     def for_customer(self, customer):
         return self.filter(subscription__customer=customer)
 
@@ -491,8 +493,8 @@ class BTTransaction(BTMirroredModel):
     CREDIT = 'credit'
 
     TYPE_CHOICES = (
-        (SALE, _('Sale')),
-        (CREDIT, _('Credit')),
+        (SALE, _('sale')),
+        (CREDIT, _('credit')),
     )
 
     collection = braintree.Transaction
@@ -515,9 +517,9 @@ class BTTransaction(BTMirroredModel):
     objects = BTTransactionManager()
 
     class Meta:
-        verbose_name = _('Transaction')
-        verbose_name_plural = _('Transactions')
         ordering = ('-created_at',)
+        verbose_name = _('transaction')
+        verbose_name_plural = _('transactions')
 
     def __unicode__(self):
         return self.amount_display
@@ -535,7 +537,7 @@ class BTTransaction(BTMirroredModel):
 
 
 class BTWebhookLog(models.Model):
-    """ A log of received webhook notficiations. Purley for debugging """
+    """ A log of received webhook notifications. Purely for debugging """
 
     received = models.DateTimeField(auto_now=True)
     kind = models.CharField(max_length=255)
@@ -543,8 +545,8 @@ class BTWebhookLog(models.Model):
     exception = models.TextField(blank=True)
 
     class Meta:
-        verbose_name = _('WebhookLog')
-        verbose_name_plural = _('WebhookLogs')
+        verbose_name = _('webhook log')
+        verbose_name_plural = _('webhook logs')
 
     def __unicode__(self):
         return self.kind
