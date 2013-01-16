@@ -21,7 +21,6 @@ from models import BTSubscription, BTSubscribedAddOn, BTSubscribedDiscount
 from models import BTTransaction, BTWebhookLog
 
 
-# TODO: Add decorator to directly receive customer in each view
 @access(access.MANAGER)
 def index(request):
     customer = request.access.customer
@@ -145,7 +144,7 @@ def confirm_credit_card(request):
 
 @access(access.MANAGER)
 def subscribe(request, plan_id):
-    customer = request.user.access.customer
+    customer = request.access.customer
     plan = get_object_or_404(BTPlan, plan_id=plan_id)
 
     if not customer.braintree.credit_cards.has_default():
