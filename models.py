@@ -18,7 +18,6 @@ CACHED = {'editable': False, 'blank': True, 'null': True}
 
 class BTCustomer(BTSyncedModel):
     collection = braintree.Customer
-    push_excluded_fields = ('plans',)
 
     id = models.OneToOneField('customers.Customer',
         related_name='braintree', primary_key=True)
