@@ -33,6 +33,8 @@ class BTCustomer(BTSyncedModel):
     plans = models.ManyToManyField('BTPlan', through='BTSubscription',
         related_name='customers')
 
+    always_exclude = ('created', 'updated', 'plans')
+
     class Meta:
         verbose_name = _('customer')
         verbose_name_plural = _('customers')
