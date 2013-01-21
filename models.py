@@ -9,7 +9,6 @@ from django.utils.translation import ugettext_lazy as _
 
 from .sync import BTSyncedModel, BTMirroredModel
 
-from jsonfield import JSONField
 
 # Common attributes sets for fields
 NULLABLE = {'blank': True, 'null': True}
