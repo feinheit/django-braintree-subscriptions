@@ -12,7 +12,7 @@ from django.utils import formats
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.csrf import csrf_exempt
 
-from ..accounts import access
+from keetab_cp.accounts import access
 
 from .utils import sync_customer
 
