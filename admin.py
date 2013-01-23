@@ -207,6 +207,7 @@ class BTWebhookLogAdmin(admin.ModelAdmin):
     formfield_overrides = {
         TextField: {'widget': forms.Textarea(attrs={'cols': 120, 'rows': 30})},
     }
+    list_display = ('kind', 'received', 'data', 'exception')
 
 admin.site.register(models.BTCustomer, BTCustomerAdmin)
 admin.site.register(models.BTPlan, BTPlanAdmin)
