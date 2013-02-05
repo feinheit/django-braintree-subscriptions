@@ -220,6 +220,7 @@ class BTAddOn(BTMirroredModel):
     number_of_billing_cycles = models.IntegerField(**CACHED)
 
     class Meta:
+        ordering = ['-amount']
         verbose_name = _('add-on')
         verbose_name_plural = _('add-ons')
 
