@@ -96,6 +96,7 @@ class BTSyncedModel(models.Model):
         key = self.braintree_key()
         data = self.collection.find(*key)
         self.import_data(data)
+        self.save()
 
     def import_data(self, data):
         """ Save the data from the vault onto the instance """
@@ -105,7 +106,6 @@ class BTSyncedModel(models.Model):
                 if not issubclass(field.__class__, RelatedObject):
                     setattr(self, key, value)
         self.updated = now()
-        self.save()
 
     """ Deprecated: implement this independentantly from import
     def import_related(self, related_model, data):
