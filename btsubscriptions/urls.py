@@ -1,7 +1,7 @@
 from django.conf.urls import patterns, url
 
 
-urlpatterns = patterns('keetab_cp.payments.views',
+urlpatterns = patterns('btsubscriptions.views',
     url(
         regex=r'^$',
         view='index',

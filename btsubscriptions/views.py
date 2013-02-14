@@ -12,8 +12,6 @@ from django.utils import formats
 from django.utils.translation import ugettext_lazy as _
 from django.views.decorators.csrf import csrf_exempt
 
-from keetab_cp.accounts import access
-
 from .utils import sync_customer
 
 from models import BTCreditCard, BTPlan, BTAddOn, BTDiscount
@@ -21,7 +19,6 @@ from models import BTSubscription, BTSubscribedAddOn, BTSubscribedDiscount
 from models import BTTransaction, BTWebhookLog
 
 
-@access(access.MANAGER)
 def index(request):
     customer = request.access.customer
 
@@ -69,7 +66,6 @@ def index(request):
     })
 
 
-@access(access.MANAGER)
 def add_credit_card(request):
     customer = request.access.customer
 
@@ -101,7 +97,6 @@ def add_credit_card(request):
     })
 
 
-@access(access.MANAGER)
 def confirm_credit_card(request):
     customer = request.access.customer
 
@@ -142,7 +137,6 @@ def confirm_credit_card(request):
         })
 
 
-@access(access.MANAGER)
 def subscribe(request, plan_id):
     customer = request.access.customer
     plan = get_object_or_404(BTPlan, plan_id=plan_id)
@@ -182,7 +176,6 @@ def subscribe(request, plan_id):
     return redirect('payment_index')
 
 
-@access(access.MANAGER)
 def unsubscribe(request, subscription_id):
     subscription = get_object_or_404(BTSubscription,
         subscription_id=subscription_id)
@@ -208,7 +201,6 @@ def unsubscribe(request, subscription_id):
         })
 
 
-@access(access.MANAGER)
 def change_to_plan(request, plan_id):
     customer = request.access.customer
     plan = get_object_or_404(BTPlan, plan_id=plan_id)
@@ -244,7 +236,6 @@ def change_to_plan(request, plan_id):
     return redirect('payment_index')
 
 
-@access(access.MANAGER)
 def multiple_subscriptions(request):
     customer = request.access.customer
     return render(request, 'payments/multiple_subscriptions.html', {
@@ -252,7 +243,6 @@ def multiple_subscriptions(request):
     })
 
 
-@access(access.MANAGER)
 def downgrade_to_free_plan(request):
     subscriptions = request.access.customer.braintree.subscriptions.running()
 
@@ -282,7 +272,6 @@ def downgrade_to_free_plan(request):
     return redirect('payment_index')
 
 
-@access(access.MANAGER)
 def enable_addon(request, sub_id, addon_id):
     subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
     add_on = get_object_or_404(BTAddOn, addon_id=addon_id)
@@ -312,7 +301,6 @@ def enable_addon(request, sub_id, addon_id):
     return redirect('payment_index')
 
 
-@access(access.MANAGER)
 def disable_addon(request, sub_id, addon_id):
     subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
     add_on = get_object_or_404(BTAddOn, addon_id=addon_id)
@@ -360,7 +348,6 @@ def disable_addon(request, sub_id, addon_id):
     return redirect('payment_index')
 
 
-@access(access.MANAGER)
 def add_discount(request, sub_id):
     subscription = get_object_or_404(BTSubscription, subscription_id=sub_id)
     discount_id = request.REQUEST.get('discount_id', '')
@@ -463,6 +450,5 @@ def handle_webhook_notficiation(notification):
     return HttpResponse('Ok, thanks')
 
 
-@access(access.MANAGER)
 def error(request):
     return render(request, 'payments/error.html')

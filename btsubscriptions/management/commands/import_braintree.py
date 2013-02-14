@@ -1,6 +1,6 @@
 from django.core.management.base import NoArgsCommand
 
-from keetab_cp.payments.models import BTPlan, BTAddOn, BTDiscount
+from btsubscriptions.models import BTPlan, BTAddOn, BTDiscount
 
 
 class Command(NoArgsCommand):
